@@ -1,0 +1,7 @@
+[package]
+name = "handoutgen"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+latex = "0.3.1"
