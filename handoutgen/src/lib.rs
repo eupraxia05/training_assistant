@@ -2,18 +2,7 @@ use std::{fmt::Error, fs, process::Command};
 
 use latex::{Document, DocumentClass, Element, Section};
 
-fn main() {
-  match generate_document() {
-    Err(e) => {
-      println!("Error generating document: {:?}", e);
-    },
-    Ok(()) => {
-      println!("Successfully generated document.");
-    }
-  }
-}
-
-fn generate_document() -> Result<(), String> {
+pub fn generate_document() -> Result<(), String> {
   let mut doc = Document::new(DocumentClass::Article);
   doc.preamble.title("2025-06-02 Session Handout");
   let mut section_1 = Section::new("Section");
