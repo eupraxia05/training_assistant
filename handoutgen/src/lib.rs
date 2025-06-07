@@ -1,7 +1,7 @@
 use std::{fmt::Error, fs, path::PathBuf, process::Command};
 use std::io::Write;
 
-use latex::{Document, DocumentClass, Element, Section};
+use latex::{Document, DocumentClass, Element, PreambleElement, Section};
 
 use directories::ProjectDirs;
 
@@ -13,7 +13,14 @@ pub fn generate_document(handout_path: PathBuf, out_path: PathBuf) -> Result<(),
   let handout_config = serde_json::from_reader::<_, HandoutConfig>(handout_file).map_err(|e| e.to_string())?;
 
   let mut doc = Document::new(DocumentClass::Article);
-  let mut section_1 = Section::new(&format!("{} Session Handout for {}", handout_config.date, handout_config.client_name));
+
+  doc.preamble.title(&format!("{} Session Handout for {}", handout_config.date, handout_config.client_name));
+  doc.preamble.push(PreambleElement::UsePackage {package: "handout".into(), argument: None});
+
+
+  doc.push(Element::TitlePage);
+
+  let mut section_1 = Section::new("Section");
   section_1.push("Wow! Look at this fuckin thing my guy");
   doc.push(section_1);
   let rendered = latex::print(&doc).map_err(|e| e.to_string())?;
@@ -24,6 +31,8 @@ pub fn generate_document(handout_path: PathBuf, out_path: PathBuf) -> Result<(),
   let pdf_path = temp_dir.join("handout.pdf");
   let dest_path = out_path.join("handout.pdf");
 
+  std::fs::write(temp_dir.join("handout.sty"), include_str!("handout.sty")).map_err(|e| e.to_string())?;
+
   std::fs::create_dir_all(temp_dir).map_err(|e| e.to_string())?;
 
   fs::write(tex_path.clone(), rendered).map_err(|e| e.to_string())?;
@@ -31,8 +40,7 @@ pub fn generate_document(handout_path: PathBuf, out_path: PathBuf) -> Result<(),
   let mut cmd = Command::new("pdflatex");
   
   cmd.arg(tex_path)
-    .arg(format!("-output-directory={}", temp_dir.display()))
-    .arg("-verbose");
+    .arg(format!("-output-directory={}", temp_dir.display()));
 
   println!("Executing {:?}", cmd);
 
