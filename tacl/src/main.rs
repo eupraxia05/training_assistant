@@ -53,7 +53,7 @@ fn main() {
   let args: Vec<String> = env::args().collect();
 
   if args.len() < 2 {
-    println!("usage: cli [action]");
+    println!("usage: tacl [action]");
     println!("actions: handoutgen");
     return;
   }

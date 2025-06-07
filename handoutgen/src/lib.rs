@@ -1,4 +1,4 @@
-use std::{fmt::Error, fs, path::PathBuf, process::Command};
+use std::{fmt::Error, fs, path::{Path, PathBuf}, process::Command};
 use std::io::Write;
 
 use latex::{Document, DocumentClass, Element, ParagraphElement, PreambleElement, Section};
@@ -7,19 +7,17 @@ use directories::ProjectDirs;
 
 use serde::{Deserialize, Serialize};
 
-pub fn generate_document(handout_path: PathBuf, out_path: PathBuf) 
-  -> Result<(), String> 
+use std::io::{Read};
+
+fn generate_document_inner(handout_config_read: impl Read, temp_dir: &Path, out_path: &Path)
+  -> Result<(), String>
 {
-  // determine file paths
-  let project_dirs = ProjectDirs::from("", "training_assistant", "handoutgen").unwrap();
-  let temp_dir = project_dirs.cache_dir();
   let tex_path = temp_dir.join("handout.tex");
   let pdf_path = temp_dir.join("handout.pdf");
   let dest_path = out_path.join("handout.pdf");
 
-  // open and deserialize the handout file
-  let handout_file = fs::File::open(handout_path).map_err(|e| e.to_string())?;
-  let handout_config = serde_json::from_reader::<_, HandoutConfig>(handout_file)
+  let handout_config = 
+    serde_json::from_reader::<_, HandoutConfig>(handout_config_read)
     .map_err(|e| e.to_string())?;
 
   // create a new document, article class
@@ -84,8 +82,22 @@ pub fn generate_document(handout_path: PathBuf, out_path: PathBuf)
   Ok(())
 }
 
+pub fn generate_document(handout_path: PathBuf, out_path: PathBuf) 
+  -> Result<(), String> 
+{
+  // determine file paths
+  let project_dirs = ProjectDirs::from("", "training_assistant", "handoutgen").unwrap();
+  let temp_dir = project_dirs.cache_dir();
+
+  // open and deserialize the handout file
+  let handout_file = fs::File::open(handout_path).map_err(|e| e.to_string())?;
+
+  generate_document_inner(handout_file, temp_dir, &out_path)?;
+
+  Ok(())
+}
+
 pub fn init_handout(out_path: PathBuf) -> Result<(), String> {
-  println!("opening {}", out_path.display());
   let file = std::fs::File::create(out_path).map_err(|e| e.to_string())?;
   serde_json::to_writer_pretty(file, &HandoutConfig::default()).map_err(|e| e.to_string())?;
 
@@ -97,4 +109,26 @@ struct HandoutConfig {
   client_name: String,
   date: String,
   summary: String,
+}
+
+#[cfg(test)]
+mod tests {
+  use tempfile::tempdir;
+
+use super::*;
+
+  #[test]
+  fn generate_document_test()
+  {
+    // open and deserialize the handout file
+    let handout_config = "{\"client_name\": \"Jane Doe\",\"date\": \"2025-06-06\",\"summary\": \"Good work today!t\"}";
+
+    let temp_dir = tempdir().expect("Failed to create temp dir for test!");
+    let temp_dir_2 = tempdir().expect("Failed to create temp dir for test!");
+
+    let result_path = temp_dir_2.path().join("handout.pdf");
+
+    generate_document_inner(handout_config.as_bytes(), temp_dir.path(), temp_dir_2.path()).expect("Failed to generate document!");
+    assert!(fs::exists(result_path).expect("Failed to check if file exists!"));
+  }
 }
