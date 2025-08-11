@@ -105,10 +105,10 @@ pub fn init_handout(out_path: PathBuf) -> Result<(), String> {
 }
 
 #[derive(Default, Serialize, Deserialize)]
-struct HandoutConfig {
-  client_name: String,
-  date: String,
-  summary: String,
+pub struct HandoutConfig {
+  pub client_name: String,
+  pub date: String,
+  pub summary: String,
 }
 
 #[cfg(test)]

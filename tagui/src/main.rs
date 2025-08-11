@@ -1,4 +1,8 @@
 use egui_dock::{DockArea, DockState, TabViewer};
+use std::path::PathBuf;
+
+use handoutgen::HandoutConfig;
+use rfd::FileDialog;
 
 fn main() {
   let native_options = eframe::NativeOptions {
@@ -38,7 +42,12 @@ impl eframe::App for TrainingAssistantApp {
       egui::menu::bar(ui, |ui| {
         ui.menu_button("File", |ui| {
           if ui.button("New Handout...").clicked() {
-            self.dock_state.main_surface_mut().push_to_first_leaf(EditorTab::default());
+            self.dock_state.main_surface_mut().push_to_first_leaf(EditorTab::new());
+          }
+          if ui.button("Save All").clicked() {
+            for tab in self.dock_state.iter_all_tabs_mut() {
+              tab.1.needs_save = false;
+            }
           }
           if ui.button("Quit").clicked() {
               ctx.send_viewport_cmd(egui::ViewportCommand::Close);
@@ -52,8 +61,35 @@ impl eframe::App for TrainingAssistantApp {
   }
 }
 
-#[derive(Default)]
-struct EditorTab;
+struct EditorTab {
+  handout_config: HandoutConfig,
+  needs_save: bool,
+  filepath: Option<PathBuf>
+}
+
+impl EditorTab {
+  fn new() -> Self {
+    Self {
+      handout_config: Default::default(),
+      needs_save: true,
+      filepath: None
+    }
+  }
+
+  fn save(&mut self) {
+    if !self.needs_save {
+      return;
+    }
+
+    if self.filepath.is_none() {
+      self.filepath = FileDialog::new().save_file();
+    }
+
+    if self.filepath.is_none() {
+      return;
+    }
+  }
+}
 
 #[derive(Default)]
 struct EditorTabViewer;
@@ -62,10 +98,25 @@ impl TabViewer for EditorTabViewer {
   type Tab = EditorTab;
 
   fn title(&mut self, tab: &mut Self::Tab) -> egui::WidgetText {
-    "tab".into()
+    if tab.needs_save {
+      "tab*".into()
+    } else {
+      "tab".into()
+    }
   }
   
   fn ui(&mut self, ui: &mut egui::Ui, tab: &mut Self::Tab) {
-    ui.label("lmao");
+    ui.horizontal(|ui| { 
+      ui.label("Client name");
+      ui.text_edit_singleline(&mut tab.handout_config.client_name);
+    });
+    ui.horizontal(|ui| { 
+      ui.label("Date");
+      ui.text_edit_singleline(&mut tab.handout_config.date);
+    });
+    ui.horizontal(|ui| { 
+      ui.label("Summary");
+      ui.text_edit_multiline(&mut tab.handout_config.summary);
+    });
   }
 }

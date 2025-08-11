@@ -1,0 +1,8 @@
+[package]
+name = "client_app"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+bevy = "0.16.1"
+bevy_cobweb_ui = { version = "0.21.1", features = ["hot_reload"] }
