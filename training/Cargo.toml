@@ -1,0 +1,9 @@
+[package]
+name = "training"
+version = "0.0.0"
+edition = "2024"
+
+[dependencies]
+directories = "6.0.0"
+rusqlite = "0.37.0"
+uuid = { version = "1.17.0", features = ["std", "v4"] }

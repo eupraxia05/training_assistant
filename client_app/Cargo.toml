@@ -1,11 +1,14 @@
 [package]
 name = "client_app"
-version = "0.0.5"
+version = "0.0.4"
 edition = "2024"
 
 [dependencies]
-bevy = "0.16.1"
+bevy = {version = "0.16.1", features = ["bevy_ui_debug"]}
+bevy_cobweb = "0.17.2"
 bevy_cobweb_ui = { version = "0.21.1", features = ["hot_reload"] }
+bevy_ui_text_input = "0.5.2"
+training = { path = "../training" }
 
 [features]
 dev = [ "bevy/dynamic_linking" ]

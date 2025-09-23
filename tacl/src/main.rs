@@ -1,5 +1,6 @@
 use std::{env, path::PathBuf};
 use clap::{Parser, Subcommand};
+use training::DatabaseConnection;
 
 #[derive(Subcommand)] 
 enum Commands {
@@ -13,7 +14,24 @@ enum Commands {
   Inithandout {
     #[clap(short = 'o', long, env)]
     out_file: PathBuf
+  },
+  Clients {
+    #[command(subcommand)]
+    command: ClientCommands
   }
+}
+
+#[derive(Subcommand)]
+enum ClientCommands {
+    List,
+    Add {
+        #[clap(short = 'n', long, env)]
+        name: String
+    },
+    Remove {
+        #[clap(short = 'i', long, env)]
+        id: i64
+    },
 }
 
 #[derive(Parser)]
@@ -47,6 +65,27 @@ fn main() {
           println!("Successfully created handout.");
         }
       }
+    },
+    Commands::Clients { command } => {
+        let mut db_connection = DatabaseConnection::open_default().expect("couldn't open database");
+        match command {
+            ClientCommands::List => {
+                let clients = db_connection.clients().expect("couldn't get clients");
+                if clients.len() == 0 {
+                    println!("No clients in database.");
+                } else {
+                    for client in clients {
+                        println!("{:?}: {}", client.id(), client.name());
+                    }
+                }
+            },
+            ClientCommands::Add { name } => {
+                db_connection.add_client(name).expect("couldn't add client");
+            },
+            ClientCommands::Remove { id } => {
+                db_connection.remove_client(training::ClientId(id)).expect("couldn't remove client");
+            },
+        }
     }
   }
 

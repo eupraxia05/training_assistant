@@ -6,3 +6,4 @@ edition = "2024"
 [dependencies]
 handoutgen = { path = "../handoutgen" }
 clap = { version = "4.5.39", features = ["env", "derive"] }
+training = { path = "../training" }

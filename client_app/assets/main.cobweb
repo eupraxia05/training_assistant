@@ -1,0 +1,63 @@
+#scenes
+"main_scene"
+    FlexNode{width:100%, height:100%, justify_main:Center, justify_cross:Center, padding:{top:10px bottom:10px left:10px right:10px}}
+    "profiles_root"
+        FlexNode{width:60%, justify_cross:Center, flex_direction: Column}
+        BackgroundColor(#222222)
+        "header"
+            FlexNode{justify_main:Center}
+            TextLine{ text: "Profiles" }
+            TextLineColor(#FFFFFF)
+            TextOutline{ width: 2.0 anti_aliasing:0.6 }
+        "profile_buttons_root"
+            FlexNode{width:90%, justify_main: Center, justify_cross: Center, flex_direction:Column}
+        "add_root"
+            FlexNode{height: 40px, justify_main: Center, justify_cross: Center}
+            "text"
+                FlexNode{justify_main: Center, justify_cross: Center}
+                TextLine{ text: "+ Add" }
+                Animated<TextLineColor>{
+                  idle: #AAAAAA
+                  hover: #FFFFFF
+                  press: #CCCCCC
+                }
+
+
+"profile_button"
+    FlexNode{width:90%, height: 40px, justify_main: Center, justify_cross: Center}
+    Animated<BackgroundColor>{
+        idle: #444444
+        hover: #666666
+        press: #555555
+    }
+    "text"
+        FlexNode{justify_main: Center, justify_cross: Center}
+        TextLine{ text: "Profile Name Goes Here" }
+
+"new_profile_form"
+    FlexNode{width:100%, height:100%, justify_main:Center, justify_cross:Center, padding:{top:10px bottom:10px left:10px right:10px}}
+    "content"
+        FlexNode{width: 60%, justify_main:Center, justify_cross:Center, flex_direction: Column}
+        BackgroundColor(#222222)
+        "header"
+            FlexNode{justify_main:Center, justify_cross: Center}
+            TextLine{ text: "New Profile" }
+        "name"
+            FlexNode{}
+            "label"
+                FlexNode{width: 128px}
+                TextLine{ text: "Name" }
+            "input"
+                FlexNode{width: 128px, height: 32px, justify_main:Center, justify_cross: Center}
+                SingleLineTextInput{}
+                BackgroundColor(#111111)
+        "submit"
+            FlexNode{}
+            Animated<BackgroundColor>{
+                idle: #444444
+                hover: #666666
+                press: #555555
+            }
+            "label"
+                FlexNode{}
+                TextLine{text:"Submit"}
