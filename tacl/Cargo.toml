@@ -7,3 +7,4 @@ edition = "2024"
 handoutgen = { path = "../handoutgen" }
 clap = { version = "4.5.39", features = ["env", "derive"] }
 training = { path = "../training" }
+invoice = { path = "../invoice" }

@@ -18,6 +18,10 @@ enum Commands {
   Clients {
     #[command(subcommand)]
     command: ClientCommands
+  },
+  Invoice {
+    #[clap(short = 'o', long, env)]
+    out_file: PathBuf
   }
 }
 
@@ -86,19 +90,9 @@ fn main() {
                 db_connection.remove_client(training::ClientId(id)).expect("couldn't remove client");
             },
         }
+    },
+    Commands::Invoice { out_file } => {
+        invoice::create_invoice(out_file); 
     }
-  }
-
-  let args: Vec<String> = env::args().collect();
-
-  if args.len() < 2 {
-    println!("usage: tacl [action]");
-    println!("actions: handoutgen");
-    return;
-  }
-
-  if args[1] == "handoutgen" {
-
-      
   }
 }

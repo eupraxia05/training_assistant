@@ -3641,7 +3641,7 @@ name = "handoutgen"
 version = "0.1.0"
 dependencies = [
  "directories",
- "latex",
+ "latex 0.3.2-alpha.0",
  "serde",
  "serde_json",
  "tempfile",
@@ -3944,6 +3944,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "invoice"
+version = "0.1.0"
+dependencies = [
+ "latex 0.3.1",
+]
+
+[[package]]
 name = "io-kit-sys"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4075,6 +4082,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "87d65e08a9ec02e409d27a0139eaa6b9756b4d81fe7cde71f6941a83730ce838"
 dependencies = [
  "bitflags 1.3.2",
+]
+
+[[package]]
+name = "latex"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c41cf333d23534df4dbd7513d5cbf52513b6b4741b9e642efa3e835c984ad241"
+dependencies = [
+ "failure",
 ]
 
 [[package]]
@@ -5992,6 +6008,7 @@ version = "0.1.0"
 dependencies = [
  "clap",
  "handoutgen",
+ "invoice",
  "training",
 ]
 

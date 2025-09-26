@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = [ "tacl","handoutgen", "tagui", "client_app", "training"]
+members = [ "tacl","handoutgen", "tagui", "client_app", "training", "invoice"]
 
 [profile.dist]
 inherits = "release"
