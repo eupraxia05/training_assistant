@@ -1,7 +1,7 @@
 use uuid::Uuid;
 use std::fs;
 use std::result;
-use rusqlite::{Connection};
+use rusqlite::{Connection, params, ToSql};
 use std::path::{Path, PathBuf};
 
 #[derive(Debug)]
@@ -58,6 +58,8 @@ impl DatabaseConnection {
     }
 
     fn open_from_path(path: &PathBuf) -> Result<Self> {
+        println!("opening database connection at {:?}", path);
+
         fs::create_dir_all(path.parent().unwrap()).map_err(|e| 
             Error::FileError(format!("failed to create dirs for path {:?}: {:?}", path, e.to_string()))
         )?;
@@ -69,7 +71,27 @@ impl DatabaseConnection {
                 "BEGIN;
                 CREATE TABLE IF NOT EXISTS clients(
                     id   INTEGER PRIMARY KEY,
-                    name TEXT NOT NULL);
+                    name TEXT);
+                COMMIT;")
+            .map_err(|e| Error::DatabaseError(e.to_string()))?;
+
+        connection
+            .execute_batch(
+                "BEGIN;
+                CREATE TABLE IF NOT EXISTS trainers(
+                    id   INTEGER PRIMARY KEY,
+                    name TEXT,
+                    companyname TEXT,
+                    address TEXT,
+                    email TEXT,
+                    phone TEXT);
+                CREATE TABLE IF NOT EXISTS invoices(
+                    id INTEGER PRIMARY KEY,
+                    invoice_number TEXT,
+                    due_date TEXT,
+                    date_paid TEXT,
+                    paid_via TEXT
+                );
                 COMMIT;")
             .map_err(|e| Error::DatabaseError(e.to_string()))?;
 
@@ -131,10 +153,168 @@ impl DatabaseConnection {
             [id.0])?;
         Ok(())
     }
+
+    pub fn get_client_metadata(&self, id: ClientId) -> Result<ClientMetadata> {
+        let Some(connection) = &self.connection else {
+            return Err(Error::NoConnectionError);
+        };
+
+        let mut select = connection.prepare("SELECT name FROM clients WHERE id = ?")?;
+
+        select.query_one([id.0], |t| {
+            Ok(ClientMetadata {
+                id,
+                name: t.get(0)?,
+            })
+        }).map_err(|e| Error::DatabaseError(e.to_string()))
+    }
+
+    pub fn add_trainer<S>(&mut self, name: S) -> Result<TrainerId>
+        where S: Into<String>
+    {
+        let Some(connection) = &self.connection else {
+            return Err(Error::NoConnectionError);
+        };
+        connection.execute_batch(format!(
+            "BEGIN;
+            INSERT INTO trainers (name)
+            VALUES
+                (\"{}\");
+            COMMIT;",
+            name.into()
+        ).as_str())?;
+        Ok(TrainerId(connection.last_insert_rowid()))
+    }
+
+    pub fn trainers(&self) -> Result<Vec<TrainerMetadata>> {
+        let Some(connection) = &self.connection else {
+            return Err(Error::NoConnectionError);
+        };
+        let mut select = connection.prepare("SELECT id, name, companyname, address, email, phone FROM trainers")?;
+    
+        Ok(select.query_map([], |row| {
+            Ok(TrainerMetadata {
+                id: TrainerId(row.get(0)?),
+                name: row.get(1)?,
+                company_name: row.get(2).unwrap_or_default(),
+                address: row.get(3).unwrap_or_default(),
+                email: row.get(4).unwrap_or_default(),
+                phone: row.get(5).unwrap_or_default(),
+            })
+        })?.filter_map(|c| {c.ok()}).collect())
+    }
+
+    pub fn remove_trainer(&mut self, id: TrainerId) -> Result<()> {
+        let Some(connection) = &self.connection else {
+            return Err(Error::NoConnectionError);
+        };
+
+        connection.execute(
+            "DELETE FROM trainers
+            WHERE id = ?",
+            [id.0])?;
+        Ok(())
+    }
+
+
+    pub fn get_trainer_metadata(&self, id: TrainerId) -> Result<TrainerMetadata> {
+        let Some(connection) = &self.connection else {
+            return Err(Error::NoConnectionError);
+        };
+
+        let mut select = connection.prepare("SELECT name, companyname, address, email, phone FROM trainers WHERE id = ?")?;
+
+        select.query_one([id.0], |t| {
+            Ok(TrainerMetadata {
+                id,
+                name: t.get(0)?,
+                company_name: t.get(1).unwrap_or_default(),
+                address: t.get(2).unwrap_or_default(),
+                email: t.get(3).unwrap_or_default(),
+                phone: t.get(4).unwrap_or_default()
+            })
+        }).map_err(|e| Error::DatabaseError(e.to_string()))
+    }
+    pub fn set_trainer_metadata_field<V>(
+        &self, 
+        id: TrainerId, 
+        field: String, 
+        value: V
+    ) -> Result<()>
+        where V: ToSql
+    {
+        let Some(connection) = &self.connection else {
+            return Err(Error::NoConnectionError);
+        };
+
+        connection.execute(format!("UPDATE trainers
+            SET {} = ?1
+        WHERE
+        id = ?2", field).as_str(), params![value, id.0])?;
+
+        Ok(())
+    }
+
+    pub fn erase(&mut self) -> Result<()> {
+        if self.connection.is_none() {
+            return Err(Error::NoConnectionError);
+        }
+
+        std::fs::remove_file(self.db_path.clone())
+            .map_err(|e| Error::DatabaseError(e.to_string()))?;
+
+        self.connection = None;
+
+        Ok(())
+    }
+
+    pub fn add_invoice(&mut self, invoice_number: String) -> Result<()> {
+        let Some(connection) = &self.connection else {
+            return Err(Error::NoConnectionError);
+        };
+
+        connection.execute_batch(format!(
+            "BEGIN;
+            INSERT INTO invoices (invoice_number)
+            VALUES
+                (\"{}\");
+            COMMIT;",
+            invoice_number
+        ).as_str())?;
+
+        Ok(())
+    }
+
+    pub fn insert_new_into_table(&mut self, table: String) -> Result<()> {
+        let Some(connection) = &self.connection else {
+            return Err(Error::NoConnectionError);
+        };
+
+        connection.execute(
+            format!("INSERT INTO {} DEFAULT VALUES;", table).as_str(), [])?;
+
+        Ok(())
+    }
+
+    pub fn set_field_in_table<V>(&mut self, table: String, id: i64, field: String, value: V) -> Result<()> 
+        where V : ToSql
+    {
+        let Some(connection) = &self.connection else {
+            return Err(Error::NoConnectionError);
+        };
+
+        connection.execute(
+            format!("UPDATE {} SET {} = ?1 WHERE id = ?2", table, field).as_str(), params![value, id])?;
+
+        Ok(())
+    }
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct ClientId(pub i64);
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub struct TrainerId(pub i64);
 
 pub struct ClientMetadata {
     id: ClientId,
@@ -148,6 +328,42 @@ impl ClientMetadata {
 
     pub fn name(&self) -> &String {
         &self.name
+    }
+}
+
+#[derive(Debug)]
+pub struct TrainerMetadata {
+    id: TrainerId,
+    name: String,
+    company_name: String,
+    address: String,
+    email: String,
+    phone: String,
+}
+
+impl TrainerMetadata {
+    pub fn id(&self) -> TrainerId {
+        self.id
+    }
+
+    pub fn name(&self) -> &String {
+        &self.name
+    }
+
+    pub fn company_name(&self) -> &String {
+        &self.company_name
+    }
+
+    pub fn address(&self) -> &String {
+        &self.address
+    }
+
+    pub fn email(&self) -> &String {
+        &self.email
+    }
+
+    pub fn phone(&self) -> &String {
+        &self.phone
     }
 }
 

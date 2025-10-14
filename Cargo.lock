@@ -2665,6 +2665,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "documents"
+version = "0.1.0"
+dependencies = [
+ "directories",
+ "latex 0.3.1",
+]
+
+[[package]]
 name = "downcast-rs"
 version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3947,7 +3955,9 @@ dependencies = [
 name = "invoice"
 version = "0.1.0"
 dependencies = [
+ "documents",
  "latex 0.3.1",
+ "training",
 ]
 
 [[package]]
@@ -4157,6 +4167,7 @@ version = "0.35.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "133c182a6a2c87864fe97778797e46c7e999672690dc9fa3ee8e241aa4a9c13f"
 dependencies = [
+ "cc",
  "pkg-config",
  "vcpkg",
 ]

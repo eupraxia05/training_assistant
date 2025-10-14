@@ -5,3 +5,5 @@ edition = "2024"
 
 [dependencies]
 latex = "0.3.1"
+documents = { path = "../documents" }
+training = { version = "0.0.0", path = "../training" }
