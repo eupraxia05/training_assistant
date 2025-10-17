@@ -8,23 +8,24 @@
 \hrule
 \vspace{0.5cm}
 
-\noindent{\textbf{Invoice Number:} 2025-0001} \\
+\noindent{\textbf{Invoice Number:} \invoicenumber} \\
 \noindent{\textbf{Client Name:} \clientname} \\
-\noindent{\textbf{Payment Due:} 10/24/2025} \\
-\noindent{\textbf{Payment Made:} 10/24/2025} \\
-\noindent{\textbf{Paid Via:} Cash} \\
+\noindent{\textbf{Payment Due:} \paymentdue} \\
+\noindent{\textbf{Payment Made:} \paymentmade} \\
+\noindent{\textbf{Paid Via:} \paidvia} \\
 
 \vspace{0.5cm}
-
+\begin{center}
 \begin{tabular}{|p{2.0cm}|p{8.0cm}|p{2.5cm}|}
 	\hline
 	\textbf{Date} & \textbf{Description} & \textbf{Amount (\$)} \\
 	\hline
-	10/24/2025 & Personal Training Session (60 min) & 30 \\
+	\chargedate & \chargedescription & \chargeamount \\
 	\hhline{|=|=|=|}
 	\multicolumn{2}{|l|}{\textbf{Total}} & \textbf{30} \\
 	\hline
 \end{tabular}
+\end{center}
 
 \vspace{0.5cm}
 

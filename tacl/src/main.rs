@@ -1,6 +1,6 @@
 use std::{env, path::PathBuf};
 use clap::{Parser, Subcommand};
-use training::{DatabaseConnection, TrainerId, ClientId};
+use training::{DatabaseConnection, TrainerId, ClientId, RowId};
 
 #[derive(Subcommand)] 
 enum Commands {
@@ -47,6 +47,20 @@ enum Commands {
 
     #[clap(long, env)]
     value: String
+  },
+  List {
+    #[clap(long, env)]
+    table: String
+  },
+  Get {
+    #[clap(long, env)]
+    table: String,
+
+    #[clap(long, env)]
+    row_id: i64,
+
+    #[clap(long, env)]
+    field: String
   }
 }
 
@@ -97,9 +111,18 @@ enum DbCommands {
 
 #[derive(Subcommand)]
 enum InvoiceCommands {
-    New {
+    Generate {
         #[clap(long, env)]
-        invoice_number: String
+        invoice_row_id: i64,
+
+        #[clap(long, env)]
+        trainer_row_id: i64,
+
+        #[clap(long, env)]
+        client_row_id: i64,
+
+        #[clap(long, env)]
+        out_folder: PathBuf,
     }
 }
 
@@ -178,6 +201,12 @@ fn main() {
     },
     Commands::Set { table, id, field, value } => {
         process_set_command(table, id, field, value);
+    },
+    Commands::List { table} => {
+        process_list_command(table);
+    },
+    Commands::Get { table, row_id, field } => {
+        process_get_command(table, row_id, field);
     }
   }
 }
@@ -216,8 +245,8 @@ fn process_invoice_command(command: InvoiceCommands) {
     let mut db_connection = DatabaseConnection::open_default().expect("Couldn't open database connection");
     
     match command {
-        InvoiceCommands::New { invoice_number } => {
-            db_connection.add_invoice(invoice_number).expect("Couldn't add invoice");
+        InvoiceCommands::Generate { invoice_row_id, trainer_row_id, client_row_id, out_folder} => {
+            invoice::create_invoice(&mut db_connection, out_folder, RowId(invoice_row_id), RowId(trainer_row_id), RowId(client_row_id));
         }
     }
 }
@@ -232,4 +261,25 @@ fn process_set_command(table: String, id: i64, field: String, value: String) {
     let mut db_connection = DatabaseConnection::open_default().expect("Couldn't open database connection");
 
     db_connection.set_field_in_table(table, id, field, value).expect("couldn't set field!");
+}
+
+fn process_list_command(table: String) {
+    let mut db_connection = DatabaseConnection::open_default().expect("Couldn't open database connection!");
+
+    let ids = db_connection.get_table_row_ids(table.clone()).expect("couldn't get table row ids");
+
+    if ids.len() == 0 {
+        println!("No entries in table {}", table);
+    } else {
+        for id in ids {
+            println!("{}", id);
+        }
+    }
+
+}
+
+fn process_get_command(table: String, row_id: i64, field_name: String) {
+    let db_connection = DatabaseConnection::open_default().expect("Couldn't open database connection!");
+
+    let result = db_connection.get_field_in_table_row::<String>(table, RowId(row_id), field_name).expect("couldn't get field!");
 }

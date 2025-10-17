@@ -1,7 +1,7 @@
 use uuid::Uuid;
 use std::fs;
 use std::result;
-use rusqlite::{Connection, params, ToSql};
+use rusqlite::{Connection, params, ToSql, types::FromSql};
 use std::path::{Path, PathBuf};
 
 #[derive(Debug)]
@@ -90,7 +90,14 @@ impl DatabaseConnection {
                     invoice_number TEXT,
                     due_date TEXT,
                     date_paid TEXT,
-                    paid_via TEXT
+                    paid_via TEXT,
+                    charges TEXT
+                );
+                CREATE TABLE IF NOT EXISTS charges(
+                    id INTEGER PRIMARY KEY,
+                    date TEXT,
+                    description TEXT,
+                    amount INTEGER
                 );
                 COMMIT;")
             .map_err(|e| Error::DatabaseError(e.to_string()))?;
@@ -190,6 +197,7 @@ impl DatabaseConnection {
         let Some(connection) = &self.connection else {
             return Err(Error::NoConnectionError);
         };
+        
         let mut select = connection.prepare("SELECT id, name, companyname, address, email, phone FROM trainers")?;
     
         Ok(select.query_map([], |row| {
@@ -308,7 +316,37 @@ impl DatabaseConnection {
 
         Ok(())
     }
+
+    pub fn get_table_row_ids(&self, table: String) -> Result<Vec<i64>> {
+        let Some(connection) = &self.connection else {
+            return Err(Error::NoConnectionError);
+        };
+ 
+        let mut select = connection.prepare(
+            format!("SELECT id FROM {}", table).as_str())?;
+    
+        Ok(select.query_map([], |row| {
+            Ok(row.get(0)?)
+        })?.filter_map(|c| {c.ok()}).collect())
+    }
+
+    pub fn get_field_in_table_row<F>(&self, table: String, row_id: RowId, field_name: String) -> Result<F>
+        where F: FromSql
+    {
+        let Some(connection) = &self.connection else {
+            return Err(Error::NoConnectionError);
+        };
+
+        let mut select = connection.prepare(format!("SELECT {} FROM {} WHERE id = ?1", field_name, table).as_str())?; //, params![row_id.0]);
+        
+        select.query_one([row_id.0], |t| {
+            Ok(t.get(0)?)
+        }).map_err(|e| Error::DatabaseError(e.to_string()))
+    }
 }
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub struct RowId(pub i64);
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct ClientId(pub i64);
