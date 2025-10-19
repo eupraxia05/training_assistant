@@ -32,9 +32,7 @@ impl DatabaseConnection {
     pub fn db_path(&self) -> &PathBuf {
         &self.db_path
     }
-}
 
-impl DatabaseConnection {
     fn get_default_db_path() -> Result<PathBuf> {
         let dirs = directories::ProjectDirs::from("", "", "training_assistant")
             .ok_or(Error::FileError("Failed to get data directory".into()))?;
@@ -63,17 +61,10 @@ impl DatabaseConnection {
         fs::create_dir_all(path.parent().unwrap()).map_err(|e| 
             Error::FileError(format!("failed to create dirs for path {:?}: {:?}", path, e.to_string()))
         )?;
-        let connection = Connection::open(path.clone())
+        let mut connection = Connection::open(path.clone())
             .map_err(|e| Error::DatabaseError(e.to_string()))?;
         
-        connection
-            .execute_batch(
-                "BEGIN;
-                CREATE TABLE IF NOT EXISTS clients(
-                    id   INTEGER PRIMARY KEY,
-                    name TEXT);
-                COMMIT;")
-            .map_err(|e| Error::DatabaseError(e.to_string()))?;
+        Client::setup(&mut connection)?;
 
         connection
             .execute_batch(
@@ -115,151 +106,6 @@ impl DatabaseConnection {
         connection.close().map_err(|e| Error::DatabaseError(e.1.to_string()))?;
         std::fs::remove_file(self.db_path.clone()).map_err(|e| Error::FileError(e.to_string()))?;
         self.db_path = PathBuf::default(); 
-        Ok(())
-    }
-
-    pub fn add_client<S>(&mut self, name: S) -> Result<ClientId>
-        where S: Into<String>
-    {
-        let Some(connection) = &self.connection else {
-            return Err(Error::NoConnectionError);
-        };
-        connection.execute_batch(format!(
-            "BEGIN;
-            INSERT INTO clients (name)
-            VALUES
-                (\"{}\");
-            COMMIT;",
-            name.into()
-        ).as_str())?;
-        Ok(ClientId(connection.last_insert_rowid()))
-    }
-
-    pub fn clients(&mut self) -> Result<Vec<ClientMetadata>> {
-        let Some(connection) = &self.connection else {
-            return Err(Error::NoConnectionError);
-        };
-        let mut select = connection.prepare("SELECT id, name FROM clients")?;
-    
-        Ok(select.query_map([], |row| {
-            Ok(ClientMetadata {
-                id: ClientId(row.get(0)?),
-                name: row.get(1)?
-            })
-        })?.filter_map(|c| {c.ok()}).collect())
-    }
-
-    pub fn remove_client(&mut self, id: ClientId) -> Result<()> {
-        let Some(connection) = &self.connection else {
-            return Err(Error::NoConnectionError);
-        };
-
-        connection.execute(
-            "DELETE FROM clients
-            WHERE id = ?",
-            [id.0])?;
-        Ok(())
-    }
-
-    pub fn get_client_metadata(&self, id: ClientId) -> Result<ClientMetadata> {
-        let Some(connection) = &self.connection else {
-            return Err(Error::NoConnectionError);
-        };
-
-        let mut select = connection.prepare("SELECT name FROM clients WHERE id = ?")?;
-
-        select.query_one([id.0], |t| {
-            Ok(ClientMetadata {
-                id,
-                name: t.get(0)?,
-            })
-        }).map_err(|e| Error::DatabaseError(e.to_string()))
-    }
-
-    pub fn add_trainer<S>(&mut self, name: S) -> Result<TrainerId>
-        where S: Into<String>
-    {
-        let Some(connection) = &self.connection else {
-            return Err(Error::NoConnectionError);
-        };
-        connection.execute_batch(format!(
-            "BEGIN;
-            INSERT INTO trainers (name)
-            VALUES
-                (\"{}\");
-            COMMIT;",
-            name.into()
-        ).as_str())?;
-        Ok(TrainerId(connection.last_insert_rowid()))
-    }
-
-    pub fn trainers(&self) -> Result<Vec<TrainerMetadata>> {
-        let Some(connection) = &self.connection else {
-            return Err(Error::NoConnectionError);
-        };
-        
-        let mut select = connection.prepare("SELECT id, name, companyname, address, email, phone FROM trainers")?;
-    
-        Ok(select.query_map([], |row| {
-            Ok(TrainerMetadata {
-                id: TrainerId(row.get(0)?),
-                name: row.get(1)?,
-                company_name: row.get(2).unwrap_or_default(),
-                address: row.get(3).unwrap_or_default(),
-                email: row.get(4).unwrap_or_default(),
-                phone: row.get(5).unwrap_or_default(),
-            })
-        })?.filter_map(|c| {c.ok()}).collect())
-    }
-
-    pub fn remove_trainer(&mut self, id: TrainerId) -> Result<()> {
-        let Some(connection) = &self.connection else {
-            return Err(Error::NoConnectionError);
-        };
-
-        connection.execute(
-            "DELETE FROM trainers
-            WHERE id = ?",
-            [id.0])?;
-        Ok(())
-    }
-
-
-    pub fn get_trainer_metadata(&self, id: TrainerId) -> Result<TrainerMetadata> {
-        let Some(connection) = &self.connection else {
-            return Err(Error::NoConnectionError);
-        };
-
-        let mut select = connection.prepare("SELECT name, companyname, address, email, phone FROM trainers WHERE id = ?")?;
-
-        select.query_one([id.0], |t| {
-            Ok(TrainerMetadata {
-                id,
-                name: t.get(0)?,
-                company_name: t.get(1).unwrap_or_default(),
-                address: t.get(2).unwrap_or_default(),
-                email: t.get(3).unwrap_or_default(),
-                phone: t.get(4).unwrap_or_default()
-            })
-        }).map_err(|e| Error::DatabaseError(e.to_string()))
-    }
-    pub fn set_trainer_metadata_field<V>(
-        &self, 
-        id: TrainerId, 
-        field: String, 
-        value: V
-    ) -> Result<()>
-        where V: ToSql
-    {
-        let Some(connection) = &self.connection else {
-            return Err(Error::NoConnectionError);
-        };
-
-        connection.execute(format!("UPDATE trainers
-            SET {} = ?1
-        WHERE
-        id = ?2", field).as_str(), params![value, id.0])?;
-
         Ok(())
     }
 
@@ -358,60 +204,42 @@ impl DatabaseConnection {
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct RowId(pub i64);
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub struct ClientId(pub i64);
+pub trait RowType: Sized {
+    fn setup(connection: &mut Connection) -> Result<()>;
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub struct TrainerId(pub i64);
+    fn from_table_row(
+        db_connection: &mut DatabaseConnection,
+        row_id: RowId
+    ) -> Result<Self>;
+}
 
-pub struct ClientMetadata {
-    id: ClientId,
+pub struct Client {
     name: String
 }
 
-impl ClientMetadata {
-    pub fn id(&self) -> ClientId {
-        self.id
-    }
-
+impl Client {
     pub fn name(&self) -> &String {
         &self.name
     }
 }
 
-#[derive(Debug)]
-pub struct TrainerMetadata {
-    id: TrainerId,
-    name: String,
-    company_name: String,
-    address: String,
-    email: String,
-    phone: String,
-}
+impl RowType for Client {
+    fn setup(connection: &mut Connection) -> Result<()> {
+        connection.execute(
+            "CREATE TABLE IF NOT EXISTS client(
+                id   INTEGER PRIMARY KEY,
+                name TEXT);",
+            []
+        )?;
 
-impl TrainerMetadata {
-    pub fn id(&self) -> TrainerId {
-        self.id
+        Ok(())
     }
 
-    pub fn name(&self) -> &String {
-        &self.name
-    }
-
-    pub fn company_name(&self) -> &String {
-        &self.company_name
-    }
-
-    pub fn address(&self) -> &String {
-        &self.address
-    }
-
-    pub fn email(&self) -> &String {
-        &self.email
-    }
-
-    pub fn phone(&self) -> &String {
-        &self.phone
+    fn from_table_row(db_connection: &mut DatabaseConnection, row_id: RowId) -> Result<Self> {
+        let name = db_connection.get_field_in_table_row::<String>("client".into(), row_id, "name".into())?;
+        Ok(Self {
+            name
+        })
     }
 }
 
@@ -427,85 +255,5 @@ mod tests {
         let db_path = conn.db_path().clone();
         assert!(fs::exists(conn.db_path()).map_err(|e| Error::FileError(format!("failed to check if db exists: {:?}", e.to_string())))?);
         Ok(())
-    }
-    
-    #[test]
-    fn add_remove_client() -> Result<()> {
-        let mut conn = DatabaseConnection::open_test()?;
-        let client_id = conn.add_client("Clarissa")?;
-        assert!(conn.clients()?.iter().any(|c| c.id == client_id));
-        conn.remove_client(client_id)?;
-        assert!(!conn.clients()?.iter().any(|c| c.id == client_id));
-        Ok(())
-    }
+    }    
 }
-
-/*pub fn init_clients_db() -> Result<()> {
-    let conn = open_clients_db_connection().expect("Couldn't open connection to clients db");
-
-    Ok(())
-}
-
-pub fn add_client(name: &'static str) -> Result<()> {
-   let conn = open_clients_db_connection().expect("Couldn't open connection to clients db");
-   let batch = format!(
-        "BEGIN;
-        INSERT INTO clients (name)
-        VALUES
-            (\"{}\");
-        COMMIT;",
-        name
-    );
-   conn.execute_batch(batch.as_str())?;
-   Ok(())
-}
-
-fn open_clients_db_connection() -> Result<Connection> {
-}
-
-pub struct ClientMetadata {
-    id: u32,
-    name: String
-}
-
-impl ClientMetadata {
-    pub fn id(&self) -> u32 {
-        self.id
-    }
-
-    pub fn name(&self) -> &String {
-        &self.name
-    }
-}
-
-pub fn get_client_metadata() -> Result<Vec<ClientMetadata>> {
-    let conn = open_clients_db_connection()?;
-
-    Ok(result)
-}
-
-#[cfg(test)]
-mod test
-{
-    use crate::{init_clients_db, add_client, get_client_metadata};
-    use rusqlite::Result;
-
-    #[test]
-    fn test_init_clients_db() -> Result<()> {
-        init_clients_db()?;
-        Ok(())
-    }
-
-    #[test]
-    fn test_add_client() -> Result<()> {
-        init_clients_db()?;
-        add_client("Clarissa")?;
-        let clients = get_client_metadata()?;
-        assert_eq!(clients.len(), 1);
-        for client in clients {
-            println!("id: {}", client.id());
-            println!("name: {}", client.name());
-        }
-        Ok(())
-    }
-}*/

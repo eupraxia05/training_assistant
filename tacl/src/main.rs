@@ -1,6 +1,6 @@
 use std::{env, path::PathBuf};
 use clap::{Parser, Subcommand, Command, ArgMatches, Arg};
-use db::{DatabaseConnection, TrainerId, ClientId, RowId};
+use db::{DatabaseConnection, RowId};
 use framework::{App, Plugin};
 
 #[derive(Default, Clone)]

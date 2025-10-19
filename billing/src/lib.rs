@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 use latex::{Document, DocumentClass, Element, PreambleElement};
 use documents::write_document;
-use db::{DatabaseConnection, TrainerId, ClientId, RowId};
+use db::{DatabaseConnection, RowId, Client, RowType};
 
 struct NewCommand(String, String);
 
@@ -11,22 +11,19 @@ impl Into<PreambleElement> for NewCommand {
     }
 }
 
-pub fn create_invoice(db_connection: &mut DatabaseConnection, out_path: PathBuf, invoice_row_id: RowId, trainer_row_id: RowId, client_row_id: RowId){
-    /*let Ok(trainer_metadata) = db_connection.get_trainer_metadata(trainer_id) else {
-        println!("couldn't get trainer metadata");
-        return;
-    };
-
-    let Ok(client_metadata) = db_connection.get_client_metadata(client_id) else {
-        println!("couldn't get client metadata");
-        return;
-    }; */
-
+pub fn create_invoice(
+    db_connection: &mut DatabaseConnection, 
+    out_path: PathBuf, 
+    invoice_row_id: RowId, 
+    trainer_row_id: RowId, 
+    client_row_id: RowId
+) {
     let company_name = db_connection.get_field_in_table_row::<String>("trainers".into(), trainer_row_id, "companyname".into()).unwrap();
     let company_address = db_connection.get_field_in_table_row::<String>("trainers".into(), trainer_row_id, "address".into()).unwrap();
     let company_email = db_connection.get_field_in_table_row::<String>("trainers".into(), trainer_row_id, "email".into()).unwrap();
     let company_phone = db_connection.get_field_in_table_row::<String>("trainers".into(), trainer_row_id, "phone".into()).unwrap();
-    let client_name = db_connection.get_field_in_table_row::<String>("clients".into(), client_row_id, "name".into()).unwrap();
+    let client = Client::from_table_row(db_connection, client_row_id).unwrap();
+    let client_name = client.name().clone();
     let invoice_number = db_connection.get_field_in_table_row::<String>("invoices".into(), invoice_row_id, "invoice_number".into()).unwrap();
     let payment_due = db_connection.get_field_in_table_row::<String>("invoices".into(), invoice_row_id, "due_date".into()).unwrap();
     let payment_made = db_connection.get_field_in_table_row::<String>("invoices".into(), invoice_row_id, "date_paid".into()).unwrap();
