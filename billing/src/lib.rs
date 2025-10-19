@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 use latex::{Document, DocumentClass, Element, PreambleElement};
 use documents::write_document;
-use training::{DatabaseConnection, TrainerId, ClientId, RowId};
+use db::{DatabaseConnection, TrainerId, ClientId, RowId};
 
 struct NewCommand(String, String);
 

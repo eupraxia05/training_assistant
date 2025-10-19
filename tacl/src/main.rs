@@ -1,6 +1,6 @@
 use std::{env, path::PathBuf};
 use clap::{Parser, Subcommand, Command, ArgMatches, Arg};
-use training::{DatabaseConnection, TrainerId, ClientId, RowId};
+use db::{DatabaseConnection, TrainerId, ClientId, RowId};
 use framework::{App, Plugin};
 
 #[derive(Default, Clone)]
@@ -195,7 +195,7 @@ fn process_invoice_generate_command(arg_matches: &ArgMatches) {
     let trainer_row_id = arg_matches.get_one::<i64>("trainer-id").expect("Missing required argument");
     let out_folder = arg_matches.get_one::<PathBuf>("out-folder").expect("Missing required argument");
 
-    invoice::create_invoice(&mut db_connection, out_folder.clone(), RowId(*invoice_row_id), RowId(*trainer_row_id), RowId(*client_row_id));
+    billing::create_invoice(&mut db_connection, out_folder.clone(), RowId(*invoice_row_id), RowId(*trainer_row_id), RowId(*client_row_id));
 }
 
 fn process_invoice_command(arg_matches: &ArgMatches) { 
