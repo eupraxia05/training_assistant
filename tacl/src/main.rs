@@ -1,270 +1,233 @@
 use std::{env, path::PathBuf};
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, Command, ArgMatches, Arg};
 use training::{DatabaseConnection, TrainerId, ClientId, RowId};
+use framework::{App, Plugin};
 
-#[derive(Subcommand)] 
-enum Commands {
-    Db {
-        #[command(subcommand)]
-        command: DbCommands
-    },
-  Handoutgen {
-    #[clap(short = 'i', long, env)]
-    handout_file: PathBuf,
+#[derive(Default, Clone)]
+struct DbPlugin;
 
-    #[clap(short = 'o', long, env)]
-    out_file: PathBuf
-  },
-  Inithandout {
-    #[clap(short = 'o', long, env)]
-    out_file: PathBuf
-  },
-  Clients {
-    #[command(subcommand)]
-    command: ClientCommands
-  },
-  Trainer {
-      #[command(subcommand)]
-      command: TrainerCommands
-  },
-  Invoice {
-    #[command(subcommand)]
-    command: InvoiceCommands
-  },
-  New {
-    #[clap(long, env)]
-    table: String
-  },
-  Set {
-    #[clap(long, env)]
-    table: String,
-
-    #[clap(long, env)]
-    id: i64,
-
-    #[clap(long, env)]
-    field: String,
-
-    #[clap(long, env)]
-    value: String
-  },
-  List {
-    #[clap(long, env)]
-    table: String
-  },
-  Get {
-    #[clap(long, env)]
-    table: String,
-
-    #[clap(long, env)]
-    row_id: i64,
-
-    #[clap(long, env)]
-    field: String
-  }
-}
-
-#[derive(Subcommand)]
-enum ClientCommands {
-    List,
-    Add {
-        #[clap(short = 'n', long, env)]
-        name: String
-    },
-    Remove {
-        #[clap(short = 'i', long, env)]
-        id: i64
-    },
-}
-
-#[derive(Subcommand)]
-enum TrainerCommands {
-    List,
-    Add {
-        #[clap(short = 'n', long, env)]
-        name: String
-    },
-    Remove {
-        #[clap(short = 'n', long, env)]
-        id: i64
-    },
-    Edit {
-        #[clap(long, env)]
-        id: i64
-    },
-    Set {
-        #[clap(long, env)]
-        id: i64,
-
-        #[clap(long, env)]
-        field: String,
-
-        #[clap(long, env)]
-        value: String,
+impl Plugin for DbPlugin {
+    fn build(self, app: &mut App) {
+        app.add_command(Command::new("db")
+            .about("View and update database configuration")
+            .subcommand(Command::new("info")
+                .about("Prints information about the database")
+            )
+            .subcommand(Command::new("erase")
+                .about("Erases the database")
+            )
+            .subcommand(Command::new("backup")
+                .about("Copies the database to a new file")
+                .arg(
+                    Arg::new("out-file")
+                    .long("out-file")
+                    .required(true)
+                    .help("File path to copy the database to (will be overwritten)")
+                )
+            )
+            .subcommand(Command::new("restore")
+                .about("Restores the database from a given file")
+                .arg(
+                    Arg::new("file")
+                    .long("file")
+                    .required(true)
+                    .help("File path to restore the database from")
+                )
+            )
+            .subcommand_required(true),
+            process_db_command
+        );
+        app.add_command(Command::new("new")
+            .about("Add a new row to a table")
+            .arg(Arg::new("table").long("table").required(true).help("Name of the table to add a row in")),
+            process_new_command
+        );
+        app.add_command(
+            Command::new("remove").alias("rm")
+                .about("Removes a row from a table")
+                .arg(
+                    Arg::new("table")
+                    .long("table")
+                    .required(true)
+                    .help("Name of the table to remove a row from")
+                )
+                .arg(
+                    Arg::new("row-id")
+                    .long("row-id")
+                    .value_parser(clap::value_parser!(i64))
+                    .required(true)
+                    .help("Row ID to remove")
+                ),
+            process_remove_command
+        );
+        app.add_command(
+            Command::new("list").alias("ls")
+                .about("Lists the rows of a table")
+                .arg(
+                    Arg::new("table")
+                    .long("table")
+                    .required(true)
+                    .help("Name of the table to list rows from")
+                ),
+            process_list_command
+        );
+        app.add_command(
+            Command::new("set")
+                .about("Sets a field in the given table and row.")
+                .arg(
+                    Arg::new("table")
+                    .long("table")
+                    .required(true)
+                    .help("Name of the table to to modify")
+                )
+                .arg(
+                    Arg::new("row-id")
+                    .long("row-id")
+                    .value_parser(clap::value_parser!(i64))
+                    .required(true)
+                    .help("Row ID to modify")
+                )
+                .arg(
+                    Arg::new("field")
+                    .long("field")
+                    .required(true)
+                    .help("Name of the field to modify")
+                )
+                .arg(
+                    Arg::new("value")
+                    .long("value")
+                    .required(true)
+                    .help("Value to set the field to")
+                ),
+            process_set_command
+        );
     }
 }
 
-#[derive(Subcommand)]
-enum DbCommands {
-    Erase,
+fn erase_db() {
+   let mut conn =  DatabaseConnection::open_default().expect("Couldn't open database connection");
+   conn.delete_db();
 }
 
-#[derive(Subcommand)]
-enum InvoiceCommands {
-    Generate {
-        #[clap(long, env)]
-        invoice_row_id: i64,
-
-        #[clap(long, env)]
-        trainer_row_id: i64,
-
-        #[clap(long, env)]
-        client_row_id: i64,
-
-        #[clap(long, env)]
-        out_folder: PathBuf,
+fn process_db_command(matches: &ArgMatches) {
+    match matches.subcommand() {
+        Some(("info", sub_m)) => { },
+        Some(("erase", sub_m)) => { erase_db() },
+        Some(("backup", sub_m)) => { },
+        Some(("restore", sub_m)) => { }
+        _ => { }
     }
 }
 
-#[derive(Parser)]
-struct CommandlineArgs {
-  #[command(subcommand)]
-  command: Commands
-}
+#[derive(Default, Clone)]
+struct InvoicePlugin;
 
-use handoutgen::{generate_document, init_handout};
+impl Plugin for InvoicePlugin {
+    fn build(self, app: &mut App) {
+        app.add_command(Command::new("invoice")
+            .alias("inv")
+            .about("Invoice related commands")
+            .subcommand(Command::new("generate")
+                .alias("gen")
+                .about("Generates an invoice document")
+                .arg(Arg::new("invoice-id")
+                    .long("invoice-id")
+                    .value_parser(clap::value_parser!(i64))
+                    .required(true)
+                    .help("The invoice row ID to generate a document from.")
+                )
+                .arg(Arg::new("trainer-id")
+                    .long("trainer-id")
+                    .value_parser(clap::value_parser!(i64))
+                    .required(true)
+                    .help("The trainer row ID.")
+                )
+                .arg(Arg::new("client-id")
+                    .long("client-id")
+                    .value_parser(clap::value_parser!(i64))
+                    .required(true)
+                    .help("The client row ID.")
+                )
+                .arg(Arg::new("out-folder")
+                    .long("out-folder")
+                    .value_parser(clap::value_parser!(PathBuf))
+                    .required(true)
+                    .help("The folder to output the document to")
+                )
+            ),
+            process_invoice_command
+        )
+    }
+}
 
 fn main() {
-  let commandline_args = CommandlineArgs::parse();
+    let app = App::new()
+        .add_plugin(DbPlugin::default())
+        .add_plugin(InvoicePlugin::default());
 
-  match commandline_args.command {
-    Commands::Handoutgen { handout_file, out_file } => {
-      match generate_document(handout_file, out_file) {
-        Err(e) => {
-          println!("Error generating document: {:?}", e);
-        },
-        Ok(()) => {
-          println!("Successfully generated document.");
-        }
-      }
-    },
-    Commands::Inithandout { out_file } => {
-      match init_handout(out_file) {
-        Err(e) => {
-          println!("Error creating handout: {:?}", e);
-        },
-        Ok(()) => {
-          println!("Successfully created handout.");
-        }
-      }
-    },
-    Commands::Clients { command } => {
-        let mut db_connection = DatabaseConnection::open_default().expect("couldn't open database");
-        match command {
-            ClientCommands::List => {
-                let clients = db_connection.clients().expect("couldn't get clients");
-                if clients.len() == 0 {
-                    println!("No clients in database.");
-                } else {
-                    for client in clients {
-                        println!("{:?}: {}", client.id(), client.name());
-                    }
-                }
-            },
-            ClientCommands::Add { name } => {
-                db_connection.add_client(name).expect("couldn't add client");
-            },
-            ClientCommands::Remove { id } => {
-                db_connection.remove_client(training::ClientId(id)).expect("couldn't remove client");
-            },
-        }
-    },
-    Commands::Invoice { command } => {
-        //let mut db_connection = DatabaseConnection::open_default().expect("Couldn't open database connection");
-        //invoice::create_invoice(&mut db_connection, out_file, TrainerId(trainer_id), ClientId(client_id));
-        process_invoice_command(command);
+    let mut command = Command::new("tacl")
+        .version("0.1.0")
+        .about("Command line interface for Training Assistant")
+        .subcommand_required(true);
 
-    },
-    Commands::Trainer { command } => {
-        process_trainer_command(command);
-    },
-    Commands::Db { command } => {
-        match command {
-            DbCommands::Erase => {
-                let mut db_connection = DatabaseConnection::open_default().expect("Couldn't open database connection");
-                db_connection.erase();
-            }
-        }
-    },
-    Commands::New { table } => {
-        process_new_command(table);
-    },
-    Commands::Set { table, id, field, value } => {
-        process_set_command(table, id, field, value);
-    },
-    Commands::List { table} => {
-        process_list_command(table);
-    },
-    Commands::Get { table, row_id, field } => {
-        process_get_command(table, row_id, field);
+    for (c, _) in app.commands() {
+        command = command.subcommand(c);
     }
-  }
-}
 
-fn process_trainer_command(command: TrainerCommands) {
-    let mut db_connection = DatabaseConnection::open_default().expect("Couldn't open database connection");
+    let matches = command.get_matches();
 
-    match command {
-        TrainerCommands::List => {
-            let trainers = db_connection.trainers().expect("couldn't get clients");
-            if trainers.len() == 0 {
-                println!("No trainers in database.");
-            } else {
-                for trainer in trainers {
-                    println!("{:?}: {}", trainer.id(), trainer.name());
+    if let Some(subcommand_name) = matches.subcommand_name() {
+        for (c, f) in app.commands() {
+            if c.get_name() == subcommand_name {
+                if let Some(subcommand_matches) = matches.subcommand_matches(subcommand_name) {
+                   f(subcommand_matches); 
                 }
             }
-        },
-        TrainerCommands::Add { name } => {
-           db_connection.add_trainer(name).expect("Couldn't add trainer"); 
-        },
-        TrainerCommands::Remove { id } => {
-            db_connection.remove_trainer(TrainerId(id)).expect("Couldn't remove trainer!");
-        },
-        TrainerCommands::Edit { id } => {
-            let trainer_metadata = db_connection.get_trainer_metadata(TrainerId(id)).expect("Couldn't get trainer metadata");
-            println!("{:?}", trainer_metadata);
-        },
-        TrainerCommands::Set { id, field, value } => {
-            db_connection.set_trainer_metadata_field(TrainerId(id), field, value).expect("Couldn't set field");
         }
     }
 }
 
-fn process_invoice_command(command: InvoiceCommands) {
+fn process_invoice_generate_command(arg_matches: &ArgMatches) {
     let mut db_connection = DatabaseConnection::open_default().expect("Couldn't open database connection");
-    
-    match command {
-        InvoiceCommands::Generate { invoice_row_id, trainer_row_id, client_row_id, out_folder} => {
-            invoice::create_invoice(&mut db_connection, out_folder, RowId(invoice_row_id), RowId(trainer_row_id), RowId(client_row_id));
-        }
+
+    let invoice_row_id = arg_matches.get_one::<i64>("invoice-id").expect("Missing required argument");
+    let client_row_id = arg_matches.get_one::<i64>("client-id").expect("Missing required argument");
+    let trainer_row_id = arg_matches.get_one::<i64>("trainer-id").expect("Missing required argument");
+    let out_folder = arg_matches.get_one::<PathBuf>("out-folder").expect("Missing required argument");
+
+    invoice::create_invoice(&mut db_connection, out_folder.clone(), RowId(*invoice_row_id), RowId(*trainer_row_id), RowId(*client_row_id));
+}
+
+fn process_invoice_command(arg_matches: &ArgMatches) { 
+    match arg_matches.subcommand() {
+        Some(("generate", sub_m)) => {process_invoice_generate_command(sub_m)},
+        _ => { }
     }
 }
 
-fn process_new_command(table: String) {
+fn process_new_command(arg_matches: &ArgMatches) {
     let mut db_connection = DatabaseConnection::open_default().expect("Couldn't open database connection");
 
-    db_connection.insert_new_into_table(table).expect("couldn't insert new row!");
+    let table: &String = arg_matches.get_one::<String>("table").expect("Missing required argument");
+    db_connection.insert_new_into_table(table.clone()).expect("couldn't insert new row!");  
+
 }
 
-fn process_set_command(table: String, id: i64, field: String, value: String) {
+fn process_set_command(arg_matches: &ArgMatches) {
     let mut db_connection = DatabaseConnection::open_default().expect("Couldn't open database connection");
 
-    db_connection.set_field_in_table(table, id, field, value).expect("couldn't set field!");
+    let table = arg_matches.get_one::<String>("table").expect("Missing required argument");
+    let row_id = arg_matches.get_one::<i64>("row-id").expect("Missing required argument");
+    let field = arg_matches.get_one::<String>("field").expect("Missing required argument");
+    let value = arg_matches.get_one::<String>("value").expect("Missing required argument");
+
+    db_connection.set_field_in_table(table.clone(), row_id.clone(), field.clone(), value.clone()).expect("couldn't set field!");
 }
 
-fn process_list_command(table: String) {
+fn process_list_command(arg_matches: &ArgMatches) {
     let mut db_connection = DatabaseConnection::open_default().expect("Couldn't open database connection!");
+
+    let table = arg_matches.get_one::<String>("table").expect("Missing required argument");
 
     let ids = db_connection.get_table_row_ids(table.clone()).expect("couldn't get table row ids");
 
@@ -278,8 +241,11 @@ fn process_list_command(table: String) {
 
 }
 
-fn process_get_command(table: String, row_id: i64, field_name: String) {
+fn process_remove_command(arg_matches: &ArgMatches) {
     let db_connection = DatabaseConnection::open_default().expect("Couldn't open database connection!");
 
-    let result = db_connection.get_field_in_table_row::<String>(table, RowId(row_id), field_name).expect("couldn't get field!");
+    let table = arg_matches.get_one::<String>("table").expect("Missing required argument");
+    let row_id = arg_matches.get_one::<i64>("row-id").expect("Missing required argument");
+
+    db_connection.remove_row_in_table(table.clone(), RowId(*row_id)).expect("Couldn't remove row from table");
 }

@@ -8,3 +8,4 @@ handoutgen = { path = "../handoutgen" }
 clap = { version = "4.5.39", features = ["env", "derive"] }
 training = { path = "../training" }
 invoice = { path = "../invoice" }
+framework = { version = "0.1.0", path = "../framework" }

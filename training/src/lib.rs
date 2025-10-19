@@ -343,6 +343,16 @@ impl DatabaseConnection {
             Ok(t.get(0)?)
         }).map_err(|e| Error::DatabaseError(e.to_string()))
     }
+
+    pub fn remove_row_in_table(&self, table: String, row_id: RowId) -> Result<()> {
+        let Some(connection) = &self.connection else {
+            return Err(Error::NoConnectionError);
+        };
+
+        connection.execute(format!("DELETE FROM {} WHERE id = ?1", table).as_str(), [row_id.0])?;
+
+        Ok(())
+    }
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
