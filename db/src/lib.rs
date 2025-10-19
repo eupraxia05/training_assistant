@@ -65,33 +65,9 @@ impl DatabaseConnection {
             .map_err(|e| Error::DatabaseError(e.to_string()))?;
         
         Client::setup(&mut connection)?;
-
-        connection
-            .execute_batch(
-                "BEGIN;
-                CREATE TABLE IF NOT EXISTS trainers(
-                    id   INTEGER PRIMARY KEY,
-                    name TEXT,
-                    companyname TEXT,
-                    address TEXT,
-                    email TEXT,
-                    phone TEXT);
-                CREATE TABLE IF NOT EXISTS invoices(
-                    id INTEGER PRIMARY KEY,
-                    invoice_number TEXT,
-                    due_date TEXT,
-                    date_paid TEXT,
-                    paid_via TEXT,
-                    charges TEXT
-                );
-                CREATE TABLE IF NOT EXISTS charges(
-                    id INTEGER PRIMARY KEY,
-                    date TEXT,
-                    description TEXT,
-                    amount INTEGER
-                );
-                COMMIT;")
-            .map_err(|e| Error::DatabaseError(e.to_string()))?;
+        Trainer::setup(&mut connection)?;
+        Invoice::setup(&mut connection)?;
+        Charge::setup(&mut connection)?;
 
         Ok(DatabaseConnection {
             connection: Some(connection),
@@ -214,7 +190,7 @@ pub trait RowType: Sized {
 }
 
 pub struct Client {
-    name: String
+    pub name: String
 }
 
 impl Client {
@@ -239,6 +215,135 @@ impl RowType for Client {
         let name = db_connection.get_field_in_table_row::<String>("client".into(), row_id, "name".into())?;
         Ok(Self {
             name
+        })
+    }
+}
+
+pub struct Trainer {
+    pub name: String,
+    pub company_name: String,
+    pub address: String,
+    pub email: String,
+    pub phone: String
+}
+
+impl RowType for Trainer {
+    fn setup(connection: &mut Connection) -> Result<()> {
+        connection.execute(
+            "CREATE TABLE IF NOT EXISTS trainer(
+                id   INTEGER PRIMARY KEY,
+                name TEXT,
+                company_name TEXT,
+                address TEXT,
+                email TEXT,
+                phone TEXT);",
+            []
+        )?;
+        Ok(())
+    }
+
+    fn from_table_row(db_connection: &mut DatabaseConnection, row_id: RowId) -> Result<Self> {
+        let name = db_connection.get_field_in_table_row::<String>("trainer".into(), row_id, "name".into())?;
+        let company_name = db_connection.get_field_in_table_row::<String>("trainer".into(), row_id, "company_name".into())?;
+        let address = db_connection.get_field_in_table_row::<String>("trainer".into(), row_id, "address".into())?;
+        let email = db_connection.get_field_in_table_row::<String>("trainer".into(), row_id, "email".into())?;
+        let phone = db_connection.get_field_in_table_row::<String>("trainer".into(), row_id, "phone".into())?;
+
+        Ok(Self {
+            name,
+            company_name,
+            address,
+            email,
+            phone
+        })
+    }
+}
+
+pub struct Invoice {
+    pub client: RowId,
+    pub trainer: RowId,
+    pub invoice_number: String,
+    pub due_date: String,
+    pub date_paid: String,
+    pub paid_via: String,
+    pub charges: Vec<RowId>
+}
+
+impl RowType for Invoice {
+    fn setup(connection: &mut Connection) -> Result<()> {
+        connection.execute(
+            "CREATE TABLE IF NOT EXISTS invoice(
+                id INTEGER PRIMARY KEY,
+                client INTEGER,
+                trainer INTEGER,
+                invoice_number TEXT,
+                due_date TEXT,
+                date_paid TEXT,
+                paid_via TEXT,
+                charges TEXT
+            );",
+            []
+        )?;
+        Ok(())
+    }
+
+    fn from_table_row(db_connection: &mut DatabaseConnection, row_id: RowId) -> Result<Self> {
+        let client = RowId(db_connection.get_field_in_table_row::<i64>("invoice".into(), row_id, "client".into())?);
+        let trainer = RowId(db_connection.get_field_in_table_row::<i64>("invoice".into(), row_id, "trainer".into())?);
+        let invoice_number = db_connection.get_field_in_table_row::<String>("invoice".into(), row_id, "invoice_number".into())?;
+        let due_date = db_connection.get_field_in_table_row::<String>("invoice".into(), row_id, "due_date".into())?;
+        let date_paid = db_connection.get_field_in_table_row::<String>("invoice".into(), row_id, "date_paid".into())?;
+        let paid_via = db_connection.get_field_in_table_row::<String>("invoice".into(), row_id, "paid_via".into())?;
+        let charges_str = db_connection.get_field_in_table_row::<String>("invoice".into(), row_id, "charges".into())?;
+        let mut charges: Vec<RowId> = Vec::new();
+
+        for split in charges_str.split(",") {
+            if let Ok(row_id) = split.parse::<i64>() {
+                charges.push(RowId(row_id));
+            }
+        }
+
+        Ok(Self {
+            client,
+            trainer,
+            invoice_number,
+            due_date,
+            date_paid,
+            paid_via,
+            charges
+        })
+    }
+}
+
+pub struct Charge {
+    pub date: String,
+    pub description: String,
+    pub amount: i32
+}
+
+impl RowType for Charge {
+    fn setup(connection: &mut Connection) -> Result<()> {
+        connection.execute("
+            CREATE TABLE IF NOT EXISTS charge(
+                id INTEGER PRIMARY KEY,
+                date TEXT,
+                description TEXT,
+                amount INTEGER
+            );",
+            []
+        )?;
+        Ok(())
+    }
+
+    fn from_table_row(db_connection: &mut DatabaseConnection, row_id: RowId) -> Result<Self> {
+        let date = db_connection.get_field_in_table_row("charge".into(), row_id, "date".into())?;   
+        let description = db_connection.get_field_in_table_row("charge".into(), row_id, "description".into())?;
+        let amount = db_connection.get_field_in_table_row("charge".into(), row_id, "amount".into())?;
+
+        Ok(Self {
+            date,
+            description,
+            amount
         })
     }
 }

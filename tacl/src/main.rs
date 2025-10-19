@@ -136,18 +136,6 @@ impl Plugin for InvoicePlugin {
                     .required(true)
                     .help("The invoice row ID to generate a document from.")
                 )
-                .arg(Arg::new("trainer-id")
-                    .long("trainer-id")
-                    .value_parser(clap::value_parser!(i64))
-                    .required(true)
-                    .help("The trainer row ID.")
-                )
-                .arg(Arg::new("client-id")
-                    .long("client-id")
-                    .value_parser(clap::value_parser!(i64))
-                    .required(true)
-                    .help("The client row ID.")
-                )
                 .arg(Arg::new("out-folder")
                     .long("out-folder")
                     .value_parser(clap::value_parser!(PathBuf))
@@ -191,11 +179,9 @@ fn process_invoice_generate_command(arg_matches: &ArgMatches) {
     let mut db_connection = DatabaseConnection::open_default().expect("Couldn't open database connection");
 
     let invoice_row_id = arg_matches.get_one::<i64>("invoice-id").expect("Missing required argument");
-    let client_row_id = arg_matches.get_one::<i64>("client-id").expect("Missing required argument");
-    let trainer_row_id = arg_matches.get_one::<i64>("trainer-id").expect("Missing required argument");
     let out_folder = arg_matches.get_one::<PathBuf>("out-folder").expect("Missing required argument");
 
-    billing::create_invoice(&mut db_connection, out_folder.clone(), RowId(*invoice_row_id), RowId(*trainer_row_id), RowId(*client_row_id));
+    billing::create_invoice(&mut db_connection, out_folder.clone(), RowId(*invoice_row_id));
 }
 
 fn process_invoice_command(arg_matches: &ArgMatches) { 
