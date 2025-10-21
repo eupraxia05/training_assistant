@@ -2,6 +2,53 @@ use std::path::PathBuf;
 use latex::{Document, DocumentClass, Element, PreambleElement};
 use documents::write_document;
 use db::{DatabaseConnection, RowId, Client, RowType, Trainer, Invoice, Charge};
+use framework::{Plugin, App};
+use clap::{Command, Arg, ArgMatches};
+
+#[derive(Default, Clone)]
+pub struct InvoicePlugin;
+
+impl Plugin for InvoicePlugin {
+    fn build(self, app: &mut App) {
+        app.add_command(Command::new("invoice")
+            .alias("inv")
+            .about("Invoice related commands")
+            .subcommand(Command::new("generate")
+                .alias("gen")
+                .about("Generates an invoice document")
+                .arg(Arg::new("invoice-id")
+                    .long("invoice-id")
+                    .value_parser(clap::value_parser!(i64))
+                    .required(true)
+                    .help("The invoice row ID to generate a document from.")
+                )
+                .arg(Arg::new("out-folder")
+                    .long("out-folder")
+                    .value_parser(clap::value_parser!(PathBuf))
+                    .required(true)
+                    .help("The folder to output the document to")
+                )
+            ),
+            process_invoice_command
+        )
+    }
+}
+
+fn process_invoice_generate_command(arg_matches: &ArgMatches) {
+    let mut db_connection = DatabaseConnection::open_default().expect("Couldn't open database connection");
+
+    let invoice_row_id = arg_matches.get_one::<i64>("invoice-id").expect("Missing required argument");
+    let out_folder = arg_matches.get_one::<PathBuf>("out-folder").expect("Missing required argument");
+
+    create_invoice(&mut db_connection, out_folder.clone(), RowId(*invoice_row_id));
+}
+
+fn process_invoice_command(arg_matches: &ArgMatches) { 
+    match arg_matches.subcommand() {
+        Some(("generate", sub_m)) => {process_invoice_generate_command(sub_m)},
+        _ => { }
+    }
+}
 
 struct NewCommand(String, String);
 

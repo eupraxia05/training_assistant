@@ -4,6 +4,8 @@ version = "0.0.0"
 edition = "2024"
 
 [dependencies]
+clap = "4.5.50"
 directories = "6.0.0"
+framework = { version = "0.1.0", path = "../framework" }
 rusqlite = { version = "0.37.0", features = ["bundled"] }
 uuid = { version = "1.17.0", features = ["std", "v4"] }
