@@ -5,3 +5,7 @@ edition = "2024"
 
 [dependencies]
 clap = "4.5.49"
+directories = "6.0.0"
+framework_derive_macros = { version = "0.1.0", path = "../framework_derive_macros" }
+rusqlite = "0.37.0"
+uuid = "1.18.1"

@@ -5,6 +5,5 @@ edition = "2024"
 
 [dependencies]
 clap = { version = "4.5.39", features = ["env", "derive"] }
-db = { path = "../db" }
 billing = { path = "../billing" }
 framework = { version = "0.1.0", path = "../framework" }

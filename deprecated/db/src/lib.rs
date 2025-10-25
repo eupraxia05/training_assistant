@@ -1,25 +1,9 @@
 use uuid::Uuid;
 use std::fs;
-use std::result;
 use rusqlite::{Connection, params, ToSql, types::FromSql};
 use std::path::{Path, PathBuf};
-use framework::{App, Plugin};
+use framework::{App, Plugin, Result, Error};
 use clap::{Arg, Command, ArgMatches};
-
-#[derive(Debug)]
-pub enum Error {
-   FileError(String),
-   DatabaseError(String),
-   NoConnectionError
-}
-
-pub type Result<T, E = Error> = result::Result<T, E>; 
-
-impl From<rusqlite::Error> for Error {
-    fn from(e: rusqlite::Error) -> Self {
-        Error::DatabaseError(e.to_string())
-    }
-}
 
 pub struct DatabaseConnection {
     connection: Option<Connection>,
@@ -47,17 +31,17 @@ impl DatabaseConnection {
         Ok(dirs.data_dir().join("data_test/data.db"))
     }
 
-    pub fn open_default() -> Result<Self> {
+    pub fn open_default(row_type_setup_fns: Vec<RowTypeSetupFn>) -> Result<Self> {
         let db_path = Self::get_default_db_path()?;
-        Self::open_from_path(&db_path)
+        Self::open_from_path(&db_path, row_type_setup_fns)
     }
 
-    pub fn open_test() -> Result<Self> {
+    pub fn open_test(row_type_setup_fns: Vec<RowTypeSetupFn>) -> Result<Self> {
         let db_path = Self::get_test_db_path()?;
-        Self::open_from_path(&db_path)
+        Self::open_from_path(&db_path, row_type_setup_fns)
     }
 
-    fn open_from_path(path: &PathBuf) -> Result<Self> {
+    fn open_from_path(path: &PathBuf, row_type_setup_fns: Vec<RowTypeSetupFn>) -> Result<Self> {
         println!("opening database connection at {:?}", path);
 
         fs::create_dir_all(path.parent().unwrap()).map_err(|e| 
@@ -65,11 +49,10 @@ impl DatabaseConnection {
         )?;
         let mut connection = Connection::open(path.clone())
             .map_err(|e| Error::DatabaseError(e.to_string()))?;
-        
-        Client::setup(&mut connection)?;
-        Trainer::setup(&mut connection)?;
-        Invoice::setup(&mut connection)?;
-        Charge::setup(&mut connection)?;
+       
+        for row_type_setup_fn in row_type_setup_fns {
+            row_type_setup_fn(&mut connection)?;
+        }
 
         Ok(DatabaseConnection {
             connection: Some(connection),
@@ -261,61 +244,6 @@ impl RowType for Trainer {
     }
 }
 
-pub struct Invoice {
-    pub client: RowId,
-    pub trainer: RowId,
-    pub invoice_number: String,
-    pub due_date: String,
-    pub date_paid: String,
-    pub paid_via: String,
-    pub charges: Vec<RowId>
-}
-
-impl RowType for Invoice {
-    fn setup(connection: &mut Connection) -> Result<()> {
-        connection.execute(
-            "CREATE TABLE IF NOT EXISTS invoice(
-                id INTEGER PRIMARY KEY,
-                client INTEGER,
-                trainer INTEGER,
-                invoice_number TEXT,
-                due_date TEXT,
-                date_paid TEXT,
-                paid_via TEXT,
-                charges TEXT
-            );",
-            []
-        )?;
-        Ok(())
-    }
-
-    fn from_table_row(db_connection: &mut DatabaseConnection, row_id: RowId) -> Result<Self> {
-        let client = RowId(db_connection.get_field_in_table_row::<i64>("invoice".into(), row_id, "client".into())?);
-        let trainer = RowId(db_connection.get_field_in_table_row::<i64>("invoice".into(), row_id, "trainer".into())?);
-        let invoice_number = db_connection.get_field_in_table_row::<String>("invoice".into(), row_id, "invoice_number".into())?;
-        let due_date = db_connection.get_field_in_table_row::<String>("invoice".into(), row_id, "due_date".into())?;
-        let date_paid = db_connection.get_field_in_table_row::<String>("invoice".into(), row_id, "date_paid".into())?;
-        let paid_via = db_connection.get_field_in_table_row::<String>("invoice".into(), row_id, "paid_via".into())?;
-        let charges_str = db_connection.get_field_in_table_row::<String>("invoice".into(), row_id, "charges".into())?;
-        let mut charges: Vec<RowId> = Vec::new();
-
-        for split in charges_str.split(",") {
-            if let Ok(row_id) = split.parse::<i64>() {
-                charges.push(RowId(row_id));
-            }
-        }
-
-        Ok(Self {
-            client,
-            trainer,
-            invoice_number,
-            due_date,
-            date_paid,
-            paid_via,
-            charges
-        })
-    }
-}
 
 pub struct Charge {
     pub date: String,
@@ -350,6 +278,8 @@ impl RowType for Charge {
     }
 }
 
+pub type RowTypeSetupFn = fn (&mut Connection) -> Result<()>;
+
 #[cfg(test)]
 mod tests {
     use crate::{Result, Error, DatabaseConnection};
@@ -357,7 +287,7 @@ mod tests {
     
     #[test] 
     fn open_connection_test() -> Result<()> {
-        let mut conn = DatabaseConnection::open_test()?;
+        let mut conn = DatabaseConnection::open_test(Vec::new())?;
         assert!(conn.is_open());
         let db_path = conn.db_path().clone();
         assert!(fs::exists(conn.db_path()).map_err(|e| Error::FileError(format!("failed to check if db exists: {:?}", e.to_string())))?);
@@ -467,7 +397,7 @@ impl Plugin for DbPlugin {
 }
 
 fn erase_db() {
-   let mut conn =  DatabaseConnection::open_default().expect("Couldn't open database connection");
+   let mut conn = DatabaseConnection::open_default().expect("Couldn't open database connection");
    conn.delete_db();
 }
 

@@ -1,7 +1,6 @@
 use std::{env, path::PathBuf};
 use clap::{Parser, Subcommand, Command, ArgMatches, Arg};
-use db::{DbPlugin, DatabaseConnection, RowId};
-use framework::{App, Plugin};
+use framework::prelude::*;
 use billing::InvoicePlugin;
 
 fn main() {
@@ -20,11 +19,13 @@ fn main() {
 
     let matches = command.get_matches();
 
+    let mut database_connection = app.open_db_connection().expect("couldn't open database connection");
+
     if let Some(subcommand_name) = matches.subcommand_name() {
         for (c, f) in app.commands() {
             if c.get_name() == subcommand_name {
                 if let Some(subcommand_matches) = matches.subcommand_matches(subcommand_name) {
-                   f(subcommand_matches); 
+                   f(subcommand_matches, &mut database_connection).expect("couldn't run command"); 
                 }
             }
         }
