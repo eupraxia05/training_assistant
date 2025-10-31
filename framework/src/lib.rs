@@ -1,5 +1,6 @@
 use clap::{Command, ArgMatches};
 use std::result;
+use std::ffi::OsString;
 
 mod db;
 use db::DatabaseConnection;
@@ -26,11 +27,11 @@ impl App {
         }
     }
 
-    pub fn add_plugin<P>(mut self, plugin: P) -> Self
+    pub fn add_plugin<P>(&mut self, plugin: P) -> &mut Self
         where P: Plugin + Clone + 'static
     {
         self.plugins.push(Box::new(plugin.clone()));
-        plugin.build(&mut self);
+        plugin.build(self);
 
         self
     }
@@ -53,9 +54,43 @@ impl App {
     pub fn open_db_connection(&self) -> Result<DatabaseConnection> {
         DatabaseConnection::open_default(&self.tables)
     }
+
+    pub fn execute(&self, command_str: &str) -> Result<CommandResponse> {
+        let mut command = Command::new("tacl")
+            .version("0.1.0")
+            .about("Command line interface for Training Assistant")
+            .subcommand_required(true);
+
+        for (c, _) in self.commands() {
+            command = command.subcommand(c);
+        }
+
+        let mut cmd_string = shlex::split(format!("tacl {}", command_str).as_str()).unwrap().iter().map(|e| OsString::from(e)).collect::<Vec<_>>();
+
+        let matches = command.get_matches_from(cmd_string);
+
+        let mut database_connection = self.open_db_connection()?;
+
+        if let Some(subcommand_name) = matches.subcommand_name() {
+            for (c, f) in self.commands() {
+                if c.get_name() == subcommand_name {
+                    if let Some(subcommand_matches) = matches.subcommand_matches(subcommand_name) {
+                        let response = f(subcommand_matches, &mut database_connection)?;
+                        return Ok(response);
+                    }
+                }
+            }
+        }
+        Err(Error::UnknownError)
+    }
 }
 
-pub type ProcessCommandFn = fn(&ArgMatches, &mut DatabaseConnection) -> Result<()>;
+#[derive(Default)]
+pub struct CommandResponse {
+    text: Option<String>
+}
+
+pub type ProcessCommandFn = fn(&ArgMatches, &mut DatabaseConnection) -> Result<CommandResponse>;
 
 pub trait Plugin {
     fn build(self, app: &mut App) -> ();
@@ -65,7 +100,8 @@ pub trait Plugin {
 pub enum Error {
    FileError(String),
    DatabaseError(String),
-   NoConnectionError
+   NoConnectionError,
+   UnknownError
 }
 
 pub type Result<T, E = Error> = result::Result<T, E>; 
@@ -81,6 +117,9 @@ pub mod prelude {
         crate::{
             App,
             Plugin,
+            Error,
+            Result,
+            CommandResponse,
             db::{
                 DbPlugin,
                 DatabaseConnection,
@@ -108,14 +147,15 @@ mod test {
         }
     }
 
-    fn process_test_command(arg_matches: &ArgMatches, db_connection: &mut DatabaseConnection) -> Result<()> {
-        Ok(())
+    fn process_test_command(_arg_matches: &ArgMatches, _db_connection: &mut DatabaseConnection) -> Result<CommandResponse> {
+        Ok(CommandResponse::default())
     }
 
     #[test]
-    fn add_command_test() {
+    fn command_test() {
         let mut app = App::new();
         app.add_plugin::<TestPlugin>(TestPlugin::default());
+        app.execute("test");
     }
 }
 

@@ -2,7 +2,7 @@ use uuid::Uuid;
 use std::fs;
 use rusqlite::{Connection, params, ToSql, types::FromSql};
 use std::path::{Path, PathBuf};
-use crate::{App, Plugin, Result, Error};
+use crate::{App, Plugin, Result, Error, CommandResponse};
 use clap::{Arg, Command, ArgMatches};
 use framework_derive_macros::Row;
 
@@ -187,27 +187,6 @@ impl Client {
     }
 }
 
-/*
-impl RowType for Client {
-    fn setup(connection: &mut Connection) -> Result<()> {
-        connection.execute(
-            "CREATE TABLE IF NOT EXISTS client(
-                id   INTEGER PRIMARY KEY,
-                name TEXT);",
-            []
-        )?;
-
-        Ok(())
-    }
-
-    fn from_table_row(db_connection: &mut DatabaseConnection, row_id: RowId) -> Result<Self> {
-        let name = db_connection.get_field_in_table_row::<String>("client".into(), row_id, "name".into())?;
-        Ok(Self {
-            name
-        })
-    }
-}*/
-
 pub trait FieldType {
     fn sql_type() -> &'static str;
     fn from_table_field(
@@ -294,39 +273,6 @@ pub struct Trainer {
     pub phone: String
 }
 
-/*
-impl RowType for Trainer {
-    fn setup(connection: &mut Connection) -> Result<()> {
-        connection.execute(
-            "CREATE TABLE IF NOT EXISTS trainer(
-                id   INTEGER PRIMARY KEY,
-                name TEXT,
-                company_name TEXT,
-                address TEXT,
-                email TEXT,
-                phone TEXT);",
-            []
-        )?;
-        Ok(())
-    }
-
-    fn from_table_row(db_connection: &mut DatabaseConnection, row_id: RowId) -> Result<Self> {
-        let name = db_connection.get_field_in_table_row::<String>("trainer".into(), row_id, "name".into())?;
-        let company_name = db_connection.get_field_in_table_row::<String>("trainer".into(), row_id, "company_name".into())?;
-        let address = db_connection.get_field_in_table_row::<String>("trainer".into(), row_id, "address".into())?;
-        let email = db_connection.get_field_in_table_row::<String>("trainer".into(), row_id, "email".into())?;
-        let phone = db_connection.get_field_in_table_row::<String>("trainer".into(), row_id, "phone".into())?;
-
-        Ok(Self {
-            name,
-            company_name,
-            address,
-            email,
-            phone
-        })
-    }
-}*/
-
 pub struct TableConfig {
     pub table_name: String,
     pub setup_fn: TableSetupFn
@@ -336,12 +282,13 @@ pub type TableSetupFn = fn (&mut Connection, String) -> Result<()>;
 
 #[cfg(test)]
 mod tests {
-    use crate::{Result, Error, DatabaseConnection};
+    use crate::prelude::*;
     use std::fs;
     
     #[test] 
     fn open_connection_test() -> Result<()> {
-        let mut conn = DatabaseConnection::open_test(Vec::new())?;
+        let tables = Vec::new();
+        let mut conn = DatabaseConnection::open_test(&tables)?;
         assert!(conn.is_open());
         let db_path = conn.db_path().clone();
         assert!(fs::exists(conn.db_path()).map_err(|e| Error::FileError(format!("failed to check if db exists: {:?}", e.to_string())))?);
@@ -456,7 +403,7 @@ fn erase_db(db_connection: &mut DatabaseConnection) {
    db_connection.delete_db();
 }
 
-fn process_db_command(matches: &ArgMatches, db_connection: &mut DatabaseConnection) -> Result<()> {
+fn process_db_command(matches: &ArgMatches, db_connection: &mut DatabaseConnection) -> Result<CommandResponse> {
     match matches.subcommand() {
         Some(("info", sub_m)) => { },
         Some(("erase", sub_m)) => { erase_db(db_connection) },
@@ -465,28 +412,28 @@ fn process_db_command(matches: &ArgMatches, db_connection: &mut DatabaseConnecti
         _ => { }
     }
 
-    Ok(())
+    Ok(CommandResponse::default())
 }
 
 
-fn process_new_command(arg_matches: &ArgMatches, db_connection: &mut DatabaseConnection) -> Result<()> {
+fn process_new_command(arg_matches: &ArgMatches, db_connection: &mut DatabaseConnection) -> Result<CommandResponse> {
     let table: &String = arg_matches.get_one::<String>("table").expect("Missing required argument");
     db_connection.insert_new_into_table(table.clone()).expect("couldn't insert new row!");  
 
-    Ok(())
+    Ok(CommandResponse::default())
 }
 
-fn process_set_command(arg_matches: &ArgMatches, db_connection: &mut DatabaseConnection) -> Result<()> {
+fn process_set_command(arg_matches: &ArgMatches, db_connection: &mut DatabaseConnection) -> Result<CommandResponse> {
     let table = arg_matches.get_one::<String>("table").expect("Missing required argument");
     let row_id = arg_matches.get_one::<i64>("row-id").expect("Missing required argument");
     let field = arg_matches.get_one::<String>("field").expect("Missing required argument");
     let value = arg_matches.get_one::<String>("value").expect("Missing required argument");
 
     db_connection.set_field_in_table(table.clone(), row_id.clone(), field.clone(), value.clone()).expect("couldn't set field!");
-    Ok(())
+    Ok(CommandResponse::default())
 }
 
-fn process_list_command(arg_matches: &ArgMatches, db_connection: &mut DatabaseConnection) -> Result<()> {
+fn process_list_command(arg_matches: &ArgMatches, db_connection: &mut DatabaseConnection) -> Result<CommandResponse> {
     let table = arg_matches.get_one::<String>("table").expect("Missing required argument");
 
     let ids = db_connection.get_table_row_ids(table.clone()).expect("couldn't get table row ids");
@@ -498,14 +445,14 @@ fn process_list_command(arg_matches: &ArgMatches, db_connection: &mut DatabaseCo
             println!("{}", id);
         }
     }
-    Ok(())
+    Ok(CommandResponse::default())
 }
 
-fn process_remove_command(arg_matches: &ArgMatches, db_connection: &mut DatabaseConnection) -> Result<()> {
+fn process_remove_command(arg_matches: &ArgMatches, db_connection: &mut DatabaseConnection) -> Result<CommandResponse> {
     let table = arg_matches.get_one::<String>("table").expect("Missing required argument");
     let row_id = arg_matches.get_one::<i64>("row-id").expect("Missing required argument");
 
     db_connection.remove_row_in_table(table.clone(), RowId(*row_id)).expect("Couldn't remove row from table");
 
-    Ok(())
+    Ok(CommandResponse::default())
 }

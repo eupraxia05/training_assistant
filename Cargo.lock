@@ -1265,6 +1265,7 @@ dependencies = [
  "directories",
  "framework_derive_macros",
  "rusqlite",
+ "shlex",
  "uuid",
 ]
 
@@ -2959,6 +2960,7 @@ dependencies = [
  "billing",
  "clap",
  "framework",
+ "shlex",
 ]
 
 [[package]]

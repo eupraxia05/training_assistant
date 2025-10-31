@@ -45,13 +45,13 @@ fn process_invoice_generate_command(arg_matches: &ArgMatches, db_connection: &mu
     create_invoice(db_connection, out_folder.clone(), RowId(*invoice_row_id));
 }
 
-fn process_invoice_command(arg_matches: &ArgMatches, db_connection: &mut DatabaseConnection) -> Result<()> { 
+fn process_invoice_command(arg_matches: &ArgMatches, db_connection: &mut DatabaseConnection) -> Result<CommandResponse> { 
     match arg_matches.subcommand() {
         Some(("generate", sub_m)) => {process_invoice_generate_command(sub_m, db_connection)},
         _ => { }
     }
 
-    Ok(())
+    Ok(CommandResponse::default())
 }
 
 struct NewCommand(String, String);
@@ -105,51 +105,6 @@ pub struct Invoice {
     pub charges: Vec<RowId>
 }
 
-/*impl RowType for Invoice {
-    fn setup(connection: &mut Connection) -> Result<()> {
-        connection.execute(
-            "CREATE TABLE IF NOT EXISTS invoice(
-                id INTEGER PRIMARY KEY,
-                client INTEGER,
-                trainer INTEGER,
-                invoice_number TEXT,
-                due_date TEXT,
-                date_paid TEXT,
-                paid_via TEXT,
-                charges TEXT
-            );",
-            []
-        )?;
-        Ok(())
-    }
-
-    fn from_table_row(db_connection: &mut DatabaseConnection, row_id: RowId) -> Result<Self> {
-        let client = RowId(db_connection.get_field_in_table_row::<i64>("invoice".into(), row_id, "client".into())?);
-        let trainer = RowId(db_connection.get_field_in_table_row::<i64>("invoice".into(), row_id, "trainer".into())?);
-        let invoice_number = db_connection.get_field_in_table_row::<String>("invoice".into(), row_id, "invoice_number".into())?;
-        let due_date = db_connection.get_field_in_table_row::<String>("invoice".into(), row_id, "due_date".into())?;
-        let date_paid = db_connection.get_field_in_table_row::<String>("invoice".into(), row_id, "date_paid".into())?;
-        let paid_via = db_connection.get_field_in_table_row::<String>("invoice".into(), row_id, "paid_via".into())?;
-        let charges_str = db_connection.get_field_in_table_row::<String>("invoice".into(), row_id, "charges".into())?;
-        let mut charges: Vec<RowId> = Vec::new();
-
-        for split in charges_str.split(",") {
-            if let Ok(row_id) = split.parse::<i64>() {
-                charges.push(RowId(row_id));
-            }
-        }
-
-        Ok(Self {
-            client,
-            trainer,
-            invoice_number,
-            due_date,
-            date_paid,
-            paid_via,
-            charges
-        })
-    }
-}*/
 
 #[derive(Row)]
 pub struct Charge {
@@ -158,29 +113,3 @@ pub struct Charge {
     pub amount: i32
 }
 
-/*impl RowType for Charge {
-    fn setup(connection: &mut Connection) -> Result<()> {
-        connection.execute("
-            CREATE TABLE IF NOT EXISTS charge(
-                id INTEGER PRIMARY KEY,
-                date TEXT,
-                description TEXT,
-                amount INTEGER
-            );",
-            []
-        )?;
-        Ok(())
-    }
-
-    fn from_table_row(db_connection: &mut DatabaseConnection, row_id: RowId) -> Result<Self> {
-        let date = db_connection.get_field_in_table_row("charge".into(), row_id, "date".into())?;   
-        let description = db_connection.get_field_in_table_row("charge".into(), row_id, "description".into())?;
-        let amount = db_connection.get_field_in_table_row("charge".into(), row_id, "amount".into())?;
-
-        Ok(Self {
-            date,
-            description,
-            amount
-        })
-    }
-}*/
