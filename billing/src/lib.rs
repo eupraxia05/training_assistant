@@ -46,19 +46,16 @@ fn process_invoice_generate_command(arg_matches: &ArgMatches, db_connection: &mu
 }
 
 fn process_invoice_command(arg_matches: &ArgMatches, db_connection: &mut DatabaseConnection) -> Result<CommandResponse> { 
-    match arg_matches.subcommand() {
-        Some(("generate", sub_m)) => {process_invoice_generate_command(sub_m, db_connection)},
-        _ => { }
-    }
+    if let Some(("generate", sub_m)) = arg_matches.subcommand() {process_invoice_generate_command(sub_m, db_connection)}
 
     Ok(CommandResponse::default())
 }
 
 struct NewCommand(String, String);
 
-impl Into<PreambleElement> for NewCommand {
-    fn into(self) -> PreambleElement {
-        PreambleElement::UserDefined(format!("\\newcommand{{\\{}}}{{{}}}", self.0, self.1)) 
+impl From<NewCommand> for PreambleElement {
+    fn from(val: NewCommand) -> Self {
+        PreambleElement::UserDefined(format!("\\newcommand{{\\{}}}{{{}}}", val.0, val.1)) 
     }
 }
 

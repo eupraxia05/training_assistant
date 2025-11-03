@@ -61,7 +61,7 @@ impl DatabaseConnection {
     }
 
     pub fn delete_db(&mut self) -> Result<()> {
-        let Some(connection) = std::mem::replace(&mut self.connection, None) else {
+        let Some(connection) = self.connection.take() else {
             return Err(Error::NoConnectionError);
         };
         connection.close().map_err(|e| Error::DatabaseError(e.1.to_string()))?;
@@ -133,7 +133,7 @@ impl DatabaseConnection {
             format!("SELECT id FROM {}", table).as_str())?;
     
         Ok(select.query_map([], |row| {
-            Ok(row.get(0)?)
+            row.get(0)
         })?.filter_map(|c| {c.ok()}).collect())
     }
 
@@ -147,7 +147,7 @@ impl DatabaseConnection {
         let mut select = connection.prepare(format!("SELECT {} FROM {} WHERE id = ?1", field_name, table).as_str())?; //, params![row_id.0]);
         
         select.query_one([row_id.0], |t| {
-            Ok(t.get(0)?)
+            t.get(0)
         }).map_err(|e| Error::DatabaseError(e.to_string()))
     }
 
@@ -205,7 +205,7 @@ impl FieldType for String {
         row_id: RowId, 
         field_name: String
     ) -> Result<Self> {
-        Ok(db_connection.get_field_in_table_row::<String>(table_name, row_id, field_name)?)
+        db_connection.get_field_in_table_row::<String>(table_name, row_id, field_name)
     }
 }
 
@@ -217,7 +217,7 @@ impl FieldType for i32 {
         row_id: RowId, 
         field_name: String
     ) -> Result<Self> {
-        Ok(db_connection.get_field_in_table_row::<i32>(table_name, row_id, field_name)?)
+        db_connection.get_field_in_table_row::<i32>(table_name, row_id, field_name)
     }
 }
 
@@ -229,7 +229,7 @@ impl FieldType for i64 {
         row_id: RowId, 
         field_name: String
     ) -> Result<Self> {
-        Ok(db_connection.get_field_in_table_row::<i64>(table_name, row_id, field_name)?)
+        db_connection.get_field_in_table_row::<i64>(table_name, row_id, field_name)
     }
 }
 
@@ -428,7 +428,7 @@ fn process_set_command(arg_matches: &ArgMatches, db_connection: &mut DatabaseCon
     let field = arg_matches.get_one::<String>("field").expect("Missing required argument");
     let value = arg_matches.get_one::<String>("value").expect("Missing required argument");
 
-    db_connection.set_field_in_table(table.clone(), row_id.clone(), field.clone(), value.clone()).expect("couldn't set field!");
+    db_connection.set_field_in_table(table.clone(), *row_id, field.clone(), value.clone()).expect("couldn't set field!");
     Ok(CommandResponse::default())
 }
 
@@ -437,7 +437,7 @@ fn process_list_command(arg_matches: &ArgMatches, db_connection: &mut DatabaseCo
 
     let ids = db_connection.get_table_row_ids(table.clone()).expect("couldn't get table row ids");
 
-    if ids.len() == 0 {
+    if ids.is_empty() {
         println!("No entries in table {}", table);
     } else {
         for id in ids {

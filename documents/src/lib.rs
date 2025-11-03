@@ -17,7 +17,7 @@ pub fn write_document(out_folder: &Path, file_name: &str, doc: &Document) -> Res
     std::fs::create_dir_all(temp_dir.clone()).map_err(|e| e.to_string())?;
 
     println!("rendering latex document...");
-    let rendered = latex::print(&doc).map_err(|e| e.to_string())?;
+    let rendered = latex::print(doc).map_err(|e| e.to_string())?;
 
     println!("writing latex document to {:?}...", tex_path);
     std::fs::write(tex_path.clone(), rendered).map_err(|e| e.to_string())?;

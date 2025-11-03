@@ -3,8 +3,8 @@ use billing::InvoicePlugin;
 
 fn main() {
     let mut context = Context::new();
-    context.add_plugin(DbPlugin::default())
-        .add_plugin(InvoicePlugin::default());
+    context.add_plugin(DbPlugin)
+        .add_plugin(InvoicePlugin);
 
     let mut command_args = std::env::args().collect::<Vec<_>>();
 
