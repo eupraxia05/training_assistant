@@ -3,63 +3,27 @@ use rusqlite::{Connection, params, ToSql, types::FromSql};
 use std::path::PathBuf;
 use crate::{Context, Plugin, Result, Error, CommandResponse};
 use clap::{Arg, Command, ArgMatches};
-use framework_derive_macros::Row;
+use framework_derive_macros::TableRow;
 
+/// A connection to the underlying SQLite database.
 pub struct DatabaseConnection {
     connection: Option<Connection>,
     db_path: PathBuf
 }
 
 impl DatabaseConnection {
+    /// Returns true if the connection is open.
     pub fn is_open(&self) -> bool {
         self.connection.is_some()
     }
-    
+   
+    /// Gets the path of the database file opened by this connection.
     pub fn db_path(&self) -> &PathBuf {
         &self.db_path
     }
 
-    fn get_default_db_path() -> Result<PathBuf> {
-        let dirs = directories::ProjectDirs::from("", "", "training_assistant")
-            .ok_or(Error::FileError("Failed to get data directory".into()))?;
-        Ok(dirs.data_dir().join("data/data.db"))
-    }
-
-    fn get_test_db_path() -> Result<PathBuf> {
-        let dirs = directories::ProjectDirs::from("", "", "training_assistant")
-            .ok_or(Error::FileError("Failed to get data directory".into()))?;
-        Ok(dirs.data_dir().join("data_test/data.db"))
-    }
-
-    pub fn open_default(table_configs: &Vec<TableConfig>) -> Result<Self> {
-        let db_path = Self::get_default_db_path()?;
-        Self::open_from_path(&db_path, table_configs)
-    }
-
-    pub fn open_test(table_configs: &Vec<TableConfig>) -> Result<Self> {
-        let db_path = Self::get_test_db_path()?;
-        Self::open_from_path(&db_path, table_configs)
-    }
-
-    fn open_from_path(path: &PathBuf, table_configs: &Vec<TableConfig>) -> Result<Self> {
-        println!("opening database connection at {:?}", path);
-
-        fs::create_dir_all(path.parent().unwrap()).map_err(|e| 
-            Error::FileError(format!("failed to create dirs for path {:?}: {:?}", path, e.to_string()))
-        )?;
-        let mut connection = Connection::open(path.clone())
-            .map_err(|e| Error::DatabaseError(e.to_string()))?;
-       
-        for table_config in table_configs {
-            (table_config.setup_fn)(&mut connection, table_config.table_name.clone())?;
-        }
-
-        Ok(DatabaseConnection {
-            connection: Some(connection),
-            db_path: path.clone()
-        })         
-    }
-
+    /// Deletes the database file. Requires a currently open connection, and will close it on successful
+    /// deletion.
     pub fn delete_db(&mut self) -> Result<()> {
         let Some(connection) = self.connection.take() else {
             return Err(Error::NoConnectionError);
@@ -67,36 +31,6 @@ impl DatabaseConnection {
         connection.close().map_err(|e| Error::DatabaseError(e.1.to_string()))?;
         std::fs::remove_file(self.db_path.clone()).map_err(|e| Error::FileError(e.to_string()))?;
         self.db_path = PathBuf::default(); 
-        Ok(())
-    }
-
-    pub fn erase(&mut self) -> Result<()> {
-        if self.connection.is_none() {
-            return Err(Error::NoConnectionError);
-        }
-
-        std::fs::remove_file(self.db_path.clone())
-            .map_err(|e| Error::DatabaseError(e.to_string()))?;
-
-        self.connection = None;
-
-        Ok(())
-    }
-
-    pub fn add_invoice(&mut self, invoice_number: String) -> Result<()> {
-        let Some(connection) = &self.connection else {
-            return Err(Error::NoConnectionError);
-        };
-
-        connection.execute_batch(format!(
-            "BEGIN;
-            INSERT INTO invoices (invoice_number)
-            VALUES
-                (\"{}\");
-            COMMIT;",
-            invoice_number
-        ).as_str())?;
-
         Ok(())
     }
 
@@ -160,12 +94,56 @@ impl DatabaseConnection {
 
         Ok(())
     }
+
+    // opens a db connection at the default db path
+    pub(crate) fn open_default(table_configs: &Vec<TableConfig>) -> Result<Self> {
+        let db_path = Self::get_default_db_path()?;
+        Self::open_from_path(&db_path, table_configs)
+    }
+
+    // opens a db connection at a test db path
+    pub(crate) fn open_test(table_configs: &Vec<TableConfig>) -> Result<Self> {
+        let db_path = Self::get_test_db_path()?;
+        Self::open_from_path(&db_path, table_configs)
+    }
+
+    fn get_default_db_path() -> Result<PathBuf> {
+        let dirs = directories::ProjectDirs::from("", "", "training_assistant")
+            .ok_or(Error::FileError("Failed to get data directory".into()))?;
+        Ok(dirs.data_dir().join("data/data.db"))
+    }
+
+    fn get_test_db_path() -> Result<PathBuf> {
+        let dirs = directories::ProjectDirs::from("", "", "training_assistant")
+            .ok_or(Error::FileError("Failed to get data directory".into()))?;
+        Ok(dirs.data_dir().join("data_test/data.db"))
+    }
+
+    // opens a db connection from the specified path
+    fn open_from_path(path: &PathBuf, table_configs: &Vec<TableConfig>) -> Result<Self> {
+        println!("opening database connection at {:?}", path);
+
+        fs::create_dir_all(path.parent().unwrap()).map_err(|e| 
+            Error::FileError(format!("failed to create dirs for path {:?}: {:?}", path, e.to_string()))
+        )?;
+        let mut connection = Connection::open(path.clone())
+            .map_err(|e| Error::DatabaseError(e.to_string()))?;
+       
+        for table_config in table_configs {
+            (table_config.setup_fn)(&mut connection, table_config.table_name.clone())?;
+        }
+
+        Ok(DatabaseConnection {
+            connection: Some(connection),
+            db_path: path.clone()
+        })         
+    }
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct RowId(pub i64);
 
-pub trait RowType: Sized {
+pub trait TableRow: Sized {
     fn setup(connection: &mut Connection, table_name: String) -> Result<()>;
 
     fn from_table_row(
@@ -175,7 +153,7 @@ pub trait RowType: Sized {
     ) -> Result<Self>;
 }
 
-#[derive(Row)]
+#[derive(TableRow)]
 pub struct Client {
     pub name: String
 }
@@ -263,7 +241,7 @@ impl FieldType for Vec<RowId> {
     }
 }
 
-#[derive(Row)]
+#[derive(TableRow)]
 pub struct Trainer {
     pub name: String,
     pub company_name: String,

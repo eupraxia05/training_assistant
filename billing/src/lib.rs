@@ -5,7 +5,7 @@ use framework::prelude::*;
 use clap::{Command, Arg, ArgMatches};
 use framework::Result;
 use rusqlite::Connection;
-use framework_derive_macros::Row;
+use framework_derive_macros::TableRow;
 
 #[derive(Default, Clone)]
 pub struct InvoicePlugin;
@@ -91,7 +91,7 @@ pub fn create_invoice(
     write_document(out_path.as_path(), "invoice", &doc).expect("failed to write document");
 }
 
-#[derive(Row)]
+#[derive(TableRow)]
 pub struct Invoice {
     pub client: RowId,
     pub trainer: RowId,
@@ -103,7 +103,7 @@ pub struct Invoice {
 }
 
 
-#[derive(Row)]
+#[derive(TableRow)]
 pub struct Charge {
     pub date: String,
     pub description: String,

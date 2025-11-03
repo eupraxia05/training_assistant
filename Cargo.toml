@@ -8,3 +8,9 @@ opt-level = 3
 lto = true
 codegen-units = 1
 strip = true
+
+[workspace.lints.rust]
+missing_docs = "warn"
+
+[workspace.lints.rustdoc]
+missing_crate_level_docs = "warn"

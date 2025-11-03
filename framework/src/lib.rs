@@ -8,26 +8,53 @@ use std::ffi::OsString;
 mod db;
 use db::DatabaseConnection;
 use db::TableConfig;
-use db::RowType;
+use db::TableRow;
 
+/// A loose application-layer framework shared across command-line and GUI
+/// interfaces.
+///
+/// ```
+/// # use framework::prelude::*;
+/// #[derive(Clone)]
+/// struct MyPlugin;
+///
+/// impl Plugin for MyPlugin {
+///     fn build(self, context: &mut Context) {
+///
+///     }
+/// }
+/// 
+/// # fn main() -> Result<()> {
+/// let mut context = Context::new();
+/// context.add_plugin(MyPlugin);
+/// let db_connection = context.open_db_connection()?;
+/// # Ok(())
+/// # }
+/// ```
 pub struct Context {
+    /// The `Plugin`s registered with this `Context`. Add one with `Context::add_plugin`.
     plugins: Vec<Box<dyn Plugin>>,
+    /// The `Command`s registered with this `Context`. Add one with `Context::add_command`.
     commands: Vec<(Command, ProcessCommandFn)>,
+    /// The tables this Context requests when opening a database connection. Add a table with
+    /// `Context::add_table`.
     tables: Vec<TableConfig>,
 }
 
 impl Context {
-    pub fn add_command(&mut self, command: Command, process_command_fn: ProcessCommandFn) -> &mut Self {
-        self.commands.push((command, process_command_fn));
-        self
-    }
-
+    /// Creates a new Context, without any plugins, commands, or tables. 
     pub fn new() -> Self {
         Self {
             plugins: Vec::default(),
             commands: Vec::default(),
             tables: Vec::default(),
         }
+    }
+
+
+    pub fn add_command(&mut self, command: Command, process_command_fn: ProcessCommandFn) -> &mut Self {
+        self.commands.push((command, process_command_fn));
+        self
     }
 
     pub fn add_plugin<P>(&mut self, plugin: P) -> &mut Self
@@ -44,7 +71,7 @@ impl Context {
     }
 
     pub fn add_table<R>(&mut self, table_name: String) -> &mut Self
-        where R: RowType
+        where R: TableRow
     {
         self.tables.push(TableConfig {
             table_name,
@@ -58,7 +85,12 @@ impl Context {
         DatabaseConnection::open_default(&self.tables)
     }
 
-    pub fn execute(&self, command_str: &str) -> Result<CommandResponse> {
+    pub fn execute(&self, command_str: &str) 
+        -> Result<CommandResponse> 
+    {
+        // todo: we use `tacl` as a dummy binary name 
+        // to make clap argument parsing work, but 
+        // this seems wrong.
         let mut command = Command::new("tacl")
             .version("0.1.0")
             .about("Command line interface for Training Assistant")
@@ -150,7 +182,7 @@ pub mod prelude {
                 DbPlugin,
                 DatabaseConnection,
                 RowId,
-                RowType,
+                TableRow,
                 FieldType,
                 Trainer,
                 Client,
