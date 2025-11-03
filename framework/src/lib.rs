@@ -1,3 +1,8 @@
+//!
+//! Common functionality used by other Training Assistant systems.
+//!
+//! Includes:
+//!
 use clap::{Command, ArgMatches};
 use std::result;
 use std::ffi::OsString;
@@ -7,13 +12,13 @@ use db::DatabaseConnection;
 use db::TableConfig;
 use db::RowType;
 
-pub struct App {
+pub struct Context {
     plugins: Vec<Box<dyn Plugin>>,
     commands: Vec<(Command, ProcessCommandFn)>,
     tables: Vec<TableConfig>,
 }
 
-impl App {
+impl Context {
     pub fn add_command(&mut self, command: Command, process_command_fn: ProcessCommandFn) -> &mut Self {
         self.commands.push((command, process_command_fn));
         self
@@ -65,7 +70,7 @@ impl App {
             command = command.subcommand(c);
         }
 
-        let mut cmd_string = shlex::split(format!("tacl {}", command_str).as_str()).unwrap().iter().map(|e| OsString::from(e)).collect::<Vec<_>>();
+        let cmd_string = shlex::split(format!("tacl {}", command_str).as_str()).unwrap().iter().map(OsString::from).collect::<Vec<_>>();
 
         let matches = command.get_matches_from(cmd_string);
 
@@ -73,15 +78,21 @@ impl App {
 
         if let Some(subcommand_name) = matches.subcommand_name() {
             for (c, f) in self.commands() {
-                if c.get_name() == subcommand_name {
-                    if let Some(subcommand_matches) = matches.subcommand_matches(subcommand_name) {
-                        let response = f(subcommand_matches, &mut database_connection)?;
-                        return Ok(response);
-                    }
+                if c.get_name() == subcommand_name
+                    && let Some(subcommand_matches) = matches.subcommand_matches(subcommand_name)
+                {
+                    let response = f(subcommand_matches, &mut database_connection)?;
+                    return Ok(response);
                 }
             }
         }
         Err(Error::UnknownError)
+    }
+}
+
+impl Default for Context {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -90,10 +101,22 @@ pub struct CommandResponse {
     text: Option<String>
 }
 
+impl CommandResponse {
+    pub fn new(text: &str) -> Self {
+        Self {
+            text: Some(text.into())
+        }
+    }
+
+    pub fn text(&self) -> &Option<String> {
+        &self.text
+    }
+}
+
 pub type ProcessCommandFn = fn(&ArgMatches, &mut DatabaseConnection) -> Result<CommandResponse>;
 
 pub trait Plugin {
-    fn build(self, app: &mut App) -> ();
+    fn build(self, context: &mut Context) -> ();
 }
 
 #[derive(Debug)]
@@ -115,7 +138,7 @@ impl From<rusqlite::Error> for Error {
 pub mod prelude {
     pub use {
         crate::{
-            App,
+            Context,
             Plugin,
             Error,
             Result,
@@ -137,25 +160,45 @@ pub mod prelude {
 #[cfg(test)]
 mod test {
     use crate::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
 
     #[derive(Default, Clone)]
     struct TestPlugin;
 
     impl Plugin for TestPlugin {
-        fn build(self, app: &mut App) {
-            app.add_command(Command::new("test"), process_test_command);
+        fn build(self, context: &mut Context) {
+            context.add_command(Command::new("test"), process_test_command);
+            context.add_command(Command::new("test2"), process_test2_command);
         }
     }
 
+    static COMMAND_EXECUTED_COUNTER: AtomicUsize = AtomicUsize::new(0);
+    
     fn process_test_command(_arg_matches: &ArgMatches, _db_connection: &mut DatabaseConnection) -> Result<CommandResponse> {
+        COMMAND_EXECUTED_COUNTER.store(1, Ordering::Relaxed);
         Ok(CommandResponse::default())
     }
 
+    static COMMAND2_EXECUTED_COUNTER: AtomicUsize = AtomicUsize::new(0);
+
+    fn process_test2_command(_arg_matches: &ArgMatches, _db_connection: &mut DatabaseConnection) -> Result<CommandResponse> {
+        COMMAND2_EXECUTED_COUNTER.store(1, Ordering::Relaxed);
+        Ok(CommandResponse::new("foobar"))
+    }
+
     #[test]
-    fn command_test() {
-        let mut app = App::new();
-        app.add_plugin::<TestPlugin>(TestPlugin::default());
-        app.execute("test");
+    fn plugin_with_commands_test() -> Result<()> {
+        let mut context = Context::new();
+        context.add_plugin::<TestPlugin>(TestPlugin::default());
+        assert_eq!(context.commands().len(), 2);
+        let response = context.execute("test")?;
+        assert_eq!(COMMAND_EXECUTED_COUNTER.load(Ordering::Relaxed), 1);
+        assert!(response.text().is_none());
+        let response2 = context.execute("test2")?;
+        assert_eq!(COMMAND2_EXECUTED_COUNTER.load(Ordering::Relaxed), 1);
+        assert!(response2.text().is_some());
+        assert_eq!(response2.text().clone().unwrap(), "foobar");
+        Ok(())
     }
 }
 

@@ -1,8 +1,7 @@
-use uuid::Uuid;
 use std::fs;
 use rusqlite::{Connection, params, ToSql, types::FromSql};
-use std::path::{Path, PathBuf};
-use crate::{App, Plugin, Result, Error, CommandResponse};
+use std::path::PathBuf;
+use crate::{Context, Plugin, Result, Error, CommandResponse};
 use clap::{Arg, Command, ArgMatches};
 use framework_derive_macros::Row;
 
@@ -288,9 +287,8 @@ mod tests {
     #[test] 
     fn open_connection_test() -> Result<()> {
         let tables = Vec::new();
-        let mut conn = DatabaseConnection::open_test(&tables)?;
+        let conn = DatabaseConnection::open_test(&tables)?;
         assert!(conn.is_open());
-        let db_path = conn.db_path().clone();
         assert!(fs::exists(conn.db_path()).map_err(|e| Error::FileError(format!("failed to check if db exists: {:?}", e.to_string())))?);
         Ok(())
     }    
@@ -300,8 +298,8 @@ mod tests {
 pub struct DbPlugin;
 
 impl Plugin for DbPlugin {
-    fn build(self, app: &mut App) {
-        app
+    fn build(self, context: &mut Context) {
+        context
             .add_command(Command::new("db")
                 .about("View and update database configuration")
                 .subcommand(Command::new("info")
@@ -332,12 +330,12 @@ impl Plugin for DbPlugin {
                 process_db_command)
             .add_table::<Trainer>("trainer".into())
             .add_table::<Client>("client".into());
-        app.add_command(Command::new("new")
+        context.add_command(Command::new("new")
             .about("Add a new row to a table")
             .arg(Arg::new("table").long("table").required(true).help("Name of the table to add a row in")),
             process_new_command
         );
-        app.add_command(
+        context.add_command(
             Command::new("remove").alias("rm")
                 .about("Removes a row from a table")
                 .arg(
@@ -355,7 +353,7 @@ impl Plugin for DbPlugin {
                 ),
             process_remove_command
         );
-        app.add_command(
+        context.add_command(
             Command::new("list").alias("ls")
                 .about("Lists the rows of a table")
                 .arg(
@@ -366,7 +364,7 @@ impl Plugin for DbPlugin {
                 ),
             process_list_command
         );
-        app.add_command(
+        context.add_command(
             Command::new("set")
                 .about("Sets a field in the given table and row.")
                 .arg(
@@ -399,20 +397,21 @@ impl Plugin for DbPlugin {
     }
 }
 
-fn erase_db(db_connection: &mut DatabaseConnection) {
-   db_connection.delete_db();
+fn erase_db(db_connection: &mut DatabaseConnection) -> Result<CommandResponse> {
+   db_connection.delete_db()?;
+   Ok(CommandResponse::default())
 }
 
 fn process_db_command(matches: &ArgMatches, db_connection: &mut DatabaseConnection) -> Result<CommandResponse> {
-    match matches.subcommand() {
-        Some(("info", sub_m)) => { },
-        Some(("erase", sub_m)) => { erase_db(db_connection) },
-        Some(("backup", sub_m)) => { },
-        Some(("restore", sub_m)) => { }
-        _ => { }
-    }
+    let response = match matches.subcommand() {
+        Some(("info", _)) => { CommandResponse::default() },
+        Some(("erase", _)) => { erase_db(db_connection)? },
+        Some(("backup", _)) => { CommandResponse::default() },
+        Some(("restore", _)) => { CommandResponse::default() }
+        _ => { CommandResponse::default() }
+    };
 
-    Ok(CommandResponse::default())
+    Ok(response)
 }
 
 
