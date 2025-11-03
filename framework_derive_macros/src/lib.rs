@@ -85,10 +85,10 @@ pub fn derive_row(item: TokenStream) -> TokenStream {
     let mut from_table_row_body = proc_macro2::TokenStream::new();
 
     for (field, _) in parsed_fields.fields.iter() {
-        let s: String = format!("let {} = {}::from_table_field(db_connection, table_name.clone(), row_id, {})?;",
+        let s: String = format!("let {} = {}::from_table_field(db_connection, table_name.clone(), row_id, \"{}\".into())?;",
             field.name.to_string().as_str(),
             type_expr_to_type_str(&field.ty),
-            format!("\"{}\".into()", field.name.to_string().as_str())
+            field.name.to_string().as_str()
         );
         from_table_row_body.extend(s.parse::<proc_macro2::TokenStream>().expect("fail 3"));
     }

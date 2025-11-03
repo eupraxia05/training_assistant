@@ -1,7 +1,7 @@
 use std::path::Path;
 use directories::ProjectDirs;
 use latex::Document;
-use std::io::{Read, Write};
+use std::io::Write;
 use std::process::Command;
 
 pub fn write_document(out_folder: &Path, file_name: &str, doc: &Document) -> Result<(), String> {

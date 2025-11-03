@@ -11,8 +11,8 @@ use framework_derive_macros::Row;
 pub struct InvoicePlugin;
 
 impl Plugin for InvoicePlugin {
-    fn build(self, app: &mut App) {
-        app
+    fn build(self, context: &mut Context) {
+        context
             .add_command(Command::new("invoice")
                 .alias("inv")
                 .about("Invoice related commands")
