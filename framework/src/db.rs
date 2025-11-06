@@ -13,7 +13,7 @@ use std::path::PathBuf;
 /// A connection to the underlying SQLite database.
 pub struct DatabaseConnection {
     connection: Option<Connection>,
-    db_path: PathBuf,
+    db_path: Option<PathBuf>,
 }
 
 impl DatabaseConnection {
@@ -23,7 +23,7 @@ impl DatabaseConnection {
     }
 
     /// Gets the path of the database file opened by this connection.
-    pub fn db_path(&self) -> &PathBuf {
+    pub fn db_path(&self) -> &Option<PathBuf> {
         &self.db_path
     }
 
@@ -37,11 +37,14 @@ impl DatabaseConnection {
         connection.close().map_err(|e| {
             Error::DatabaseError(e.1.to_string())
         })?;
-        std::fs::remove_file(self.db_path.clone())
-            .map_err(|e| {
-                Error::FileError(e.to_string())
-            })?;
-        self.db_path = PathBuf::default();
+
+        if let Some(db_path) = &self.db_path {
+            std::fs::remove_file(db_path.clone())
+                .map_err(|e| {
+                    Error::FileError(e.to_string())
+                })?;
+            self.db_path = None;
+        }
         Ok(())
     }
 
@@ -52,7 +55,7 @@ impl DatabaseConnection {
     pub fn new_row_in_table(
         &mut self,
         table: impl Into<String>,
-    ) -> Result<()> {
+    ) -> Result<RowId> {
         let Some(connection) = &self.connection else {
             return Err(Error::NoConnectionError);
         };
@@ -66,7 +69,9 @@ impl DatabaseConnection {
             [],
         )?;
 
-        Ok(())
+        let row_id = connection.last_insert_rowid();
+
+        Ok(RowId(row_id))
     }
 
     /// Sets a field in a table to a given value.
@@ -80,9 +85,9 @@ impl DatabaseConnection {
     ///     implement `ToSql`)
     pub fn set_field_in_table<V>(
         &mut self,
-        table: String,
+        table: impl Into<String>,
         row_id: RowId,
-        field: String,
+        field: impl Into<String>,
         value: V,
     ) -> Result<()>
     where
@@ -95,7 +100,8 @@ impl DatabaseConnection {
         connection.execute(
             format!(
                 "UPDATE {} SET {} = ?1 WHERE id = ?2",
-                table, field
+                table.into(),
+                field.into()
             )
             .as_str(),
             params![value, row_id.0],
@@ -104,6 +110,9 @@ impl DatabaseConnection {
         Ok(())
     }
 
+    /// Gets all the available row IDs in a given table.
+    ///
+    /// * `table` - The name of the table to get row IDs from.
     pub fn get_table_row_ids(
         &self,
         table: String,
@@ -123,6 +132,14 @@ impl DatabaseConnection {
             .collect())
     }
 
+    /// Gets a field from a given table row. The generic argument
+    /// specifies what type the field should be interpreted as.
+    /// Returns `Ok(F)` if the field was successfully found, `Err`
+    /// if not.
+    ///
+    /// * `table` - The table name to get a field from.
+    /// * `row_id` - The ID of the row to get a field from.
+    /// * `field_name` - The field name to get.
     pub fn get_field_in_table_row<F>(
         &self,
         table: String,
@@ -151,6 +168,11 @@ impl DatabaseConnection {
             })
     }
 
+    /// Removes a row from a table. Returns `Ok` if the row was
+    /// successfully removed, `Err` otherwise.
+    ///
+    /// * `table` - The name of the table to remove a row from.
+    /// * `row_id` - The row ID to remove.
     pub fn remove_row_in_table(
         &self,
         table: String,
@@ -184,8 +206,7 @@ impl DatabaseConnection {
     pub(crate) fn open_test(
         table_configs: &Vec<TableConfig>,
     ) -> Result<Self> {
-        let db_path = Self::get_test_db_path()?;
-        Self::open_from_path(&db_path, table_configs)
+        Self::open_in_memory(table_configs)
     }
 
     fn get_default_db_path() -> Result<PathBuf> {
@@ -200,16 +221,21 @@ impl DatabaseConnection {
         Ok(dirs.data_dir().join("data/data.db"))
     }
 
-    fn get_test_db_path() -> Result<PathBuf> {
-        let dirs = directories::ProjectDirs::from(
-            "",
-            "",
-            "training_assistant",
-        )
-        .ok_or(Error::FileError(
-            "Failed to get data directory".into(),
-        ))?;
-        Ok(dirs.data_dir().join("data_test/data.db"))
+    fn open_in_memory(
+        table_configs: &Vec<TableConfig>,
+    ) -> Result<Self> {
+        let mut connection =
+            Connection::open_in_memory()?;
+
+        Self::setup_connection(
+            &mut connection,
+            table_configs,
+        )?;
+
+        Ok(Self {
+            connection: Some(connection),
+            db_path: None,
+        })
     }
 
     // opens a db connection from the specified path
@@ -226,29 +252,52 @@ impl DatabaseConnection {
         let mut connection =
             Connection::open(path.clone())?;
 
-        for table_config in table_configs {
-            (table_config.setup_fn)(
-                &mut connection,
-                table_config.table_name.clone(),
-            )?;
-        }
+        Self::setup_connection(
+            &mut connection,
+            table_configs,
+        )?;
 
         Ok(DatabaseConnection {
             connection: Some(connection),
-            db_path: path.clone(),
+            db_path: Some(path.clone()),
         })
+    }
+
+    fn setup_connection(
+        connection: &mut Connection,
+        table_configs: &Vec<TableConfig>,
+    ) -> Result<()> {
+        for table_config in table_configs {
+            (table_config.setup_fn)(
+                connection,
+                table_config.table_name.clone(),
+            )?;
+        }
+        Ok(())
     }
 }
 
+/// Used to identify a unique row in a table.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct RowId(pub i64);
 
+/// A trait implemented by a struct to define a table's columns.
+/// Use the `framework_derive_macros::TableRow` derive macro to
+/// implement this trait automatically.
 pub trait TableRow: Sized {
+    /// Called when a connection is opened. Executes the appropriate
+    /// SQL query to create the table if it does not exist.
     fn setup(
         connection: &mut Connection,
         table_name: String,
     ) -> Result<()>;
 
+    /// Creates an instance of this struct based on a row from the
+    /// given table.
+    ///
+    /// * `db_connection` - A connection to the SQL database.
+    /// * `table_name` - The name of the table to get data from.
+    /// * `row_id` - The row ID to get data from.
     fn from_table_row(
         db_connection: &mut DatabaseConnection,
         table_name: String,
@@ -256,19 +305,32 @@ pub trait TableRow: Sized {
     ) -> Result<Self>;
 }
 
+/// Contains data about a single training client.
 #[derive(TableRow)]
 pub struct Client {
-    pub name: String,
+    // The client's name.
+    name: String,
 }
 
 impl Client {
+    /// Gets a client's name.
     pub fn name(&self) -> &String {
         &self.name
     }
 }
 
+/// A trait for types stored in a SQL database. Useful
+/// for translating data from SQL to Rust.
 pub trait FieldType {
+    /// Gets the SQL data type (`INTEGER`, `TEXT`, etc)
     fn sql_type() -> &'static str;
+
+    /// Creates an instance of the data type from a SQL table.
+    ///
+    /// * `db_connection` - A connection to the SQL database.
+    /// * `table_name` - The name of the table to get data from.
+    /// * `row_id` - The row ID to get data from.
+    /// * `field_name` - The name of the field to get data from.
     fn from_table_field(
         db_connection: &mut DatabaseConnection,
         table_name: String,
@@ -369,44 +431,63 @@ impl FieldType for Vec<RowId> {
     }
 }
 
+/// Stores information about a trainer. Useful for holding company details.
 #[derive(TableRow)]
 pub struct Trainer {
-    pub name: String,
-    pub company_name: String,
-    pub address: String,
-    pub email: String,
-    pub phone: String,
+    name: String,
+    company_name: String,
+    address: String,
+    email: String,
+    phone: String,
 }
 
-pub struct TableConfig {
-    pub table_name: String,
-    pub setup_fn: TableSetupFn,
-}
+impl Trainer {
+    /// Gets the trainer's name.
+    pub fn name(&self) -> &String {
+        &self.name
+    }
 
-pub type TableSetupFn =
-    fn(&mut Connection, String) -> Result<()>;
+    /// Gets the trainer's company name.
+    pub fn company_name(&self) -> &String {
+        &self.company_name
+    }
 
-#[cfg(test)]
-mod tests {
-    use crate::prelude::*;
-    use std::fs;
+    /// Gets the trainer's address.
+    pub fn address(&self) -> &String {
+        &self.address
+    }
 
-    #[test]
-    fn open_connection_test() -> Result<()> {
-        let tables = Vec::new();
-        let conn =
-            DatabaseConnection::open_test(&tables)?;
-        assert!(conn.is_open());
-        assert!(fs::exists(conn.db_path()).map_err(
-            |e| Error::FileError(format!(
-                "failed to check if db exists: {:?}",
-                e.to_string()
-            ))
-        )?);
-        Ok(())
+    /// Gets the trainer's email address.
+    pub fn email(&self) -> &String {
+        &self.email
+    }
+
+    /// Gets the trainer's phone number.
+    pub fn phone(&self) -> &String {
+        &self.phone
     }
 }
 
+/// A configuration for a SQL table. Used when opening a
+/// database connection to ensure all needed tables exist.
+pub struct TableConfig {
+    /// The name of the table.
+    pub table_name: String,
+
+    /// The setup function for the table. Generally should
+    /// be the `TableRow::setup` implementation for the
+    /// row type.
+    pub setup_fn: TableSetupFn,
+}
+
+/// A pointer to a function used to set up a table. Generally
+/// points to the `TableRow::setup` implementation for a
+/// given row type.
+pub type TableSetupFn =
+    fn(&mut Connection, String) -> Result<()>;
+
+/// Add this plugin to a `Context` to add default tables and
+/// basic database editing commands.
 #[derive(Default, Clone)]
 pub struct DbPlugin;
 
@@ -650,7 +731,23 @@ mod test {
         context.add_plugin(TestPlugin);
         let mut db_connection =
             context.open_db_connection()?;
-        db_connection.new_row_in_table("foo")?;
+        // test db connection shouldn't have a file path
+        assert!(db_connection.db_path().is_none());
+        let inserted_row =
+            db_connection.new_row_in_table("foo")?;
+        assert_eq!(inserted_row.0, 1);
+        db_connection.set_field_in_table(
+            "foo",
+            inserted_row,
+            "bar",
+            "foobar",
+        )?;
+        let table_row = TestTableRow::from_table_row(
+            &mut db_connection,
+            "foo".into(),
+            inserted_row,
+        )?;
+        assert_eq!(table_row.bar, "foobar");
         Ok(())
     }
 }

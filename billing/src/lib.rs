@@ -1,3 +1,4 @@
+//! A plugin for generating invoices and tracking charges.
 use clap::{Arg, ArgMatches, Command};
 use documents::write_document;
 use framework::Result;
@@ -6,14 +7,21 @@ use framework_derive_macros::TableRow;
 use latex::{
     Document, DocumentClass, Element, PreambleElement,
 };
-use rusqlite::Connection;
 use std::path::PathBuf;
 
+/// A `Plugin` that sets up the required commands and
+/// tables for billing.
 #[derive(Default, Clone)]
 pub struct InvoicePlugin;
 
 impl Plugin for InvoicePlugin {
     fn build(self, context: &mut Context) {
+        // set up charge and invoice tables
+        context
+            .add_table::<Charge>("charge")
+            .add_table::<Invoice>("invoice");
+
+        // set up invoice command
         context
             .add_command(Command::new("invoice")
                 .alias("inv")
@@ -34,16 +42,15 @@ impl Plugin for InvoicePlugin {
                         .help("The folder to output the document to")
                     )
                 ),
-                process_invoice_command)
-            .add_table::<Charge>("charge")
-            .add_table::<Invoice>("invoice");
+                process_invoice_command
+            );
     }
 }
 
 fn process_invoice_generate_command(
     arg_matches: &ArgMatches,
     db_connection: &mut DatabaseConnection,
-) {
+) -> Result<CommandResponse> {
     let invoice_row_id = arg_matches
         .get_one::<i64>("invoice-id")
         .expect("Missing required argument");
@@ -55,7 +62,9 @@ fn process_invoice_generate_command(
         db_connection,
         out_folder.clone(),
         RowId(*invoice_row_id),
-    );
+    )?;
+
+    Ok(CommandResponse::default())
 }
 
 fn process_invoice_command(
@@ -65,10 +74,10 @@ fn process_invoice_command(
     if let Some(("generate", sub_m)) =
         arg_matches.subcommand()
     {
-        process_invoice_generate_command(
+        return process_invoice_generate_command(
             sub_m,
             db_connection,
-        )
+        );
     }
 
     Ok(CommandResponse::default())
@@ -89,33 +98,28 @@ pub fn create_invoice(
     db_connection: &mut DatabaseConnection,
     out_path: PathBuf,
     invoice_row_id: RowId,
-) {
+) -> Result<()> {
     let invoice = Invoice::from_table_row(
         db_connection,
         "invoice".into(),
         invoice_row_id,
-    )
-    .unwrap();
+    )?;
     let trainer = Trainer::from_table_row(
         db_connection,
         "trainer".into(),
         invoice.trainer,
-    )
-    .unwrap();
+    )?;
     let client = Client::from_table_row(
         db_connection,
         "client".into(),
         invoice.client,
-    )
-    .unwrap();
+    )?;
     let charge = Charge::from_table_row(
         db_connection,
         "charge".into(),
         invoice.charges[0],
-    )
-    .unwrap();
+    )?;
 
-    println!("creating invoice at {:?}", out_path);
     let mut doc =
         Document::new(DocumentClass::Article);
     doc.preamble.use_package("hhline");
@@ -125,23 +129,23 @@ pub fn create_invoice(
     });
     doc.preamble.push(NewCommand(
         "companyname".into(),
-        trainer.company_name,
+        trainer.company_name().clone(),
     ));
     doc.preamble.push(NewCommand(
         "companyaddress".into(),
-        trainer.address,
+        trainer.address().clone(),
     ));
     doc.preamble.push(NewCommand(
         "companyemail".into(),
-        trainer.email,
+        trainer.email().clone(),
     ));
     doc.preamble.push(NewCommand(
         "companyphone".into(),
-        trainer.phone,
+        trainer.phone().clone(),
     ));
     doc.preamble.push(NewCommand(
         "clientname".into(),
-        client.name,
+        client.name().clone(),
     ));
     doc.preamble.push(NewCommand(
         "invoicenumber".into(),
@@ -182,6 +186,8 @@ pub fn create_invoice(
         &doc,
     )
     .expect("failed to write document");
+
+    Ok(())
 }
 
 #[derive(TableRow)]
