@@ -1,5 +1,5 @@
 use crate::db::{
-    DatabaseConnection, TableConfig, TableRow,
+    DbConnection, TableConfig, TableRow,
 };
 use crate::{Error, Result};
 
@@ -26,7 +26,7 @@ use std::ffi::OsString;
 ///
 /// fn process_foo_command(
 ///     _: &ArgMatches,
-///     _: &mut DatabaseConnection
+///     _: &mut DbConnection
 ///     ) -> Result<CommandResponse>
 /// {
 ///     Ok(CommandResponse::new("foo command invoked"))
@@ -119,11 +119,11 @@ impl Context {
     /// which case it uses a separate test db path.
     pub fn open_db_connection(
         &self,
-    ) -> Result<DatabaseConnection> {
+    ) -> Result<DbConnection> {
         if cfg!(test) {
-            DatabaseConnection::open_test(&self.tables)
+            DbConnection::open_test(&self.tables)
         } else {
-            DatabaseConnection::open_default(
+            DbConnection::open_default(
                 &self.tables,
             )
         }
@@ -228,7 +228,7 @@ impl CommandResponse {
 
 type ProcessCommandFn = fn(
     &ArgMatches,
-    &mut DatabaseConnection,
+    &mut DbConnection,
 ) -> Result<CommandResponse>;
 
 /// An interface for adding functionality to a Context. Inspired by Bevy's plugin interface.
@@ -264,7 +264,7 @@ mod test {
 
     fn process_test_command(
         _arg_matches: &ArgMatches,
-        _db_connection: &mut DatabaseConnection,
+        _db_connection: &mut DbConnection,
     ) -> Result<CommandResponse> {
         COMMAND_EXECUTED_COUNTER
             .store(1, Ordering::Relaxed);
@@ -276,7 +276,7 @@ mod test {
 
     fn process_test2_command(
         _arg_matches: &ArgMatches,
-        _db_connection: &mut DatabaseConnection,
+        _db_connection: &mut DbConnection,
     ) -> Result<CommandResponse> {
         COMMAND2_EXECUTED_COUNTER
             .store(1, Ordering::Relaxed);

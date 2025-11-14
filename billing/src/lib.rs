@@ -49,7 +49,7 @@ impl Plugin for InvoicePlugin {
 
 fn process_invoice_generate_command(
     arg_matches: &ArgMatches,
-    db_connection: &mut DatabaseConnection,
+    db_connection: &mut DbConnection,
 ) -> Result<CommandResponse> {
     let invoice_row_id = arg_matches
         .get_one::<i64>("invoice-id")
@@ -69,7 +69,7 @@ fn process_invoice_generate_command(
 
 fn process_invoice_command(
     arg_matches: &ArgMatches,
-    db_connection: &mut DatabaseConnection,
+    db_connection: &mut DbConnection,
 ) -> Result<CommandResponse> {
     if let Some(("generate", sub_m)) =
         arg_matches.subcommand()
@@ -95,7 +95,7 @@ impl From<NewCommand> for PreambleElement {
 }
 
 pub fn create_invoice(
-    db_connection: &mut DatabaseConnection,
+    db_connection: &mut DbConnection,
     out_path: PathBuf,
     invoice_row_id: RowId,
 ) -> Result<()> {

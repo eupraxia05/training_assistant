@@ -146,7 +146,7 @@ fn generate_table_row_from_table_row_fn_definition(
 
     quote::quote! {
         fn from_table_row(
-            db_connection: &mut DatabaseConnection,
+            db_connection: &mut DbConnection,
             table_name: String,
             row_id: RowId
         ) -> Result<Self>

@@ -48,7 +48,7 @@ pub mod prelude {
         Error, Result,
         context::{CommandResponse, Context, Plugin},
         db::{
-            Client, DatabaseConnection, DbPlugin,
+            Client, DbConnection, DbPlugin,
             FieldType, RowId, TableConfig, TableRow,
             Trainer,
         },

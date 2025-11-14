@@ -20,7 +20,7 @@ use std::path::PathBuf;
 pub struct DbPlugin;
 
 /// A connection to the underlying SQLite database.
-pub struct DatabaseConnection {
+pub struct DbConnection {
     // The rusqlite connection. None if it's closed
     // or not opened yet.
     connection: Option<Connection>,
@@ -30,7 +30,7 @@ pub struct DatabaseConnection {
     db_path: Option<PathBuf>,
 }
 
-impl DatabaseConnection {
+impl DbConnection {
     /// Returns true if the connection is open.
     pub fn is_open(&self) -> bool {
         self.connection.is_some()
@@ -239,7 +239,7 @@ pub trait TableRow: Sized {
     /// * `table_name` - The name of the table to get data from.
     /// * `row_id` - The row ID to get data from.
     fn from_table_row(
-        db_connection: &mut DatabaseConnection,
+        db_connection: &mut DbConnection,
         table_name: String,
         row_id: RowId,
     ) -> Result<Self>;
@@ -272,7 +272,7 @@ pub trait FieldType {
     /// * `row_id` - The row ID to get data from.
     /// * `field_name` - The name of the field to get data from.
     fn from_table_field(
-        db_connection: &mut DatabaseConnection,
+        db_connection: &mut DbConnection,
         table_name: String,
         row_id: RowId,
         field_name: String,
@@ -453,7 +453,7 @@ fn add_db_commands(context: &mut Context) {
 }
 
 fn erase_db(
-    db_connection: &mut DatabaseConnection,
+    db_connection: &mut DbConnection,
 ) -> Result<CommandResponse> {
     db_connection.delete_db()?;
     Ok(CommandResponse::default())
@@ -461,7 +461,7 @@ fn erase_db(
 
 fn process_db_command(
     matches: &ArgMatches,
-    db_connection: &mut DatabaseConnection,
+    db_connection: &mut DbConnection,
 ) -> Result<CommandResponse> {
     let response = match matches.subcommand() {
         Some(("info", _)) => {
@@ -482,7 +482,7 @@ fn process_db_command(
 
 fn process_new_command(
     arg_matches: &ArgMatches,
-    db_connection: &mut DatabaseConnection,
+    db_connection: &mut DbConnection,
 ) -> Result<CommandResponse> {
     let table: &String = arg_matches
         .get_one::<String>("table")
@@ -496,7 +496,7 @@ fn process_new_command(
 
 fn process_set_command(
     arg_matches: &ArgMatches,
-    db_connection: &mut DatabaseConnection,
+    db_connection: &mut DbConnection,
 ) -> Result<CommandResponse> {
     let table = arg_matches
         .get_one::<String>("table")
@@ -526,7 +526,7 @@ fn process_set_command(
 
 fn process_list_command(
     arg_matches: &ArgMatches,
-    db_connection: &mut DatabaseConnection,
+    db_connection: &mut DbConnection,
 ) -> Result<CommandResponse> {
     let table = arg_matches
         .get_one::<String>("table")
@@ -548,7 +548,7 @@ fn process_list_command(
 
 fn process_remove_command(
     arg_matches: &ArgMatches,
-    db_connection: &mut DatabaseConnection,
+    db_connection: &mut DbConnection,
 ) -> Result<CommandResponse> {
     let table = arg_matches
         .get_one::<String>("table")
@@ -567,7 +567,7 @@ fn process_remove_command(
     Ok(CommandResponse::default())
 }
 
-impl DatabaseConnection {
+impl DbConnection {
     // opens a db connection at the default db path
     pub(crate) fn open_default(
         table_configs: &Vec<TableConfig>,
@@ -639,7 +639,7 @@ impl DatabaseConnection {
             table_configs,
         )?;
 
-        Ok(DatabaseConnection {
+        Ok(DbConnection {
             connection: Some(connection),
             db_path: Some(path.clone()),
         })
@@ -672,7 +672,7 @@ impl FieldType for String {
         "TEXT"
     }
     fn from_table_field(
-        db_connection: &mut DatabaseConnection,
+        db_connection: &mut DbConnection,
         table_name: String,
         row_id: RowId,
         field_name: String,
@@ -688,7 +688,7 @@ impl FieldType for i32 {
         "INTEGER"
     }
     fn from_table_field(
-        db_connection: &mut DatabaseConnection,
+        db_connection: &mut DbConnection,
         table_name: String,
         row_id: RowId,
         field_name: String,
@@ -704,7 +704,7 @@ impl FieldType for i64 {
         "INTEGER"
     }
     fn from_table_field(
-        db_connection: &mut DatabaseConnection,
+        db_connection: &mut DbConnection,
         table_name: String,
         row_id: RowId,
         field_name: String,
@@ -720,7 +720,7 @@ impl FieldType for RowId {
         "INTEGER"
     }
     fn from_table_field(
-        db_connection: &mut DatabaseConnection,
+        db_connection: &mut DbConnection,
         table_name: String,
         row_id: RowId,
         field_name: String,
@@ -739,7 +739,7 @@ impl FieldType for Vec<RowId> {
         "TEXT"
     }
     fn from_table_field(
-        db_connection: &mut DatabaseConnection,
+        db_connection: &mut DbConnection,
         table_name: String,
         row_id: RowId,
         field_name: String,
