@@ -10,9 +10,23 @@ use rusqlite::{
 use std::fs;
 use std::path::PathBuf;
 
+//////////////////////////////////////////////////////
+// PUBLIC API
+//////////////////////////////////////////////////////
+
+/// Add this plugin to a `Context` to add default 
+/// tables and basic database editing commands.
+#[derive(Default, Clone)]
+pub struct DbPlugin;
+
 /// A connection to the underlying SQLite database.
 pub struct DatabaseConnection {
+    // The rusqlite connection. None if it's closed
+    // or not opened yet.
     connection: Option<Connection>,
+
+    // The filepath the database was opened from.
+    // None if it's an in-memory connection.
     db_path: Option<PathBuf>,
 }
 
@@ -22,22 +36,33 @@ impl DatabaseConnection {
         self.connection.is_some()
     }
 
-    /// Gets the path of the database file opened by this connection.
+    /// Gets the path of the database file opened 
+    /// by this connection.
     pub fn db_path(&self) -> &Option<PathBuf> {
         &self.db_path
     }
 
-    /// Deletes the database file. Requires a currently open connection, and will close it on successful
-    /// deletion.
+    /// Closes and deletes the database. Requires a 
+    /// currently open connection, and will close it 
+    /// before deleting the file. If this is an 
+    /// in-memory database connection without a file, 
+    /// it will just close the connection.
+    ///
+    /// Returns `Ok` if the database was successfully
+    /// closed and deleted.
     pub fn delete_db(&mut self) -> Result<()> {
+        // check if the connection exists
+        // not using get_connection_if_exists because
+        // we intend to consume the connection
         let Some(connection) = self.connection.take()
         else {
             return Err(Error::NoConnectionError);
         };
-        connection.close().map_err(|e| {
-            Error::DatabaseError(e.1.to_string())
-        })?;
 
+        // close the connection
+        connection.close().map_err(|e| e.1)?;
+
+        // erase the database file (if it exists)
         if let Some(db_path) = &self.db_path {
             std::fs::remove_file(db_path.clone())
                 .map_err(|e| {
@@ -45,6 +70,7 @@ impl DatabaseConnection {
                 })?;
             self.db_path = None;
         }
+
         Ok(())
     }
 
@@ -56,10 +82,10 @@ impl DatabaseConnection {
         &mut self,
         table: impl Into<String>,
     ) -> Result<RowId> {
-        let Some(connection) = &self.connection else {
-            return Err(Error::NoConnectionError);
-        };
+        let connection = self.get_connection_if_exists()?;
 
+        // execute the INSERT command with the given
+        // table
         connection.execute(
             format!(
                 "INSERT INTO {} DEFAULT VALUES;",
@@ -69,6 +95,10 @@ impl DatabaseConnection {
             [],
         )?;
 
+        // get the last inserted row ID
+        // this is guaranteed to be valid and match
+        // the intended row, as we would have already
+        // exited if insertion failed
         let row_id = connection.last_insert_rowid();
 
         Ok(RowId(row_id))
@@ -93,9 +123,7 @@ impl DatabaseConnection {
     where
         V: ToSql,
     {
-        let Some(connection) = &self.connection else {
-            return Err(Error::NoConnectionError);
-        };
+        let connection = self.get_connection_if_exists()?;
 
         connection.execute(
             format!(
@@ -117,9 +145,7 @@ impl DatabaseConnection {
         &self,
         table: String,
     ) -> Result<Vec<i64>> {
-        let Some(connection) = &self.connection else {
-            return Err(Error::NoConnectionError);
-        };
+        let connection = self.get_connection_if_exists()?;
 
         let mut select = connection.prepare(
             format!("SELECT id FROM {}", table)
@@ -149,9 +175,7 @@ impl DatabaseConnection {
     where
         F: FromSql,
     {
-        let Some(connection) = &self.connection else {
-            return Err(Error::NoConnectionError);
-        };
+        let connection = self.get_connection_if_exists()?;
 
         let mut select = connection.prepare(
             format!(
@@ -178,9 +202,7 @@ impl DatabaseConnection {
         table: String,
         row_id: RowId,
     ) -> Result<()> {
-        let Some(connection) = &self.connection else {
-            return Err(Error::NoConnectionError);
-        };
+        let connection = self.get_connection_if_exists()?;
 
         connection.execute(
             format!(
@@ -191,88 +213,6 @@ impl DatabaseConnection {
             [row_id.0],
         )?;
 
-        Ok(())
-    }
-
-    // opens a db connection at the default db path
-    pub(crate) fn open_default(
-        table_configs: &Vec<TableConfig>,
-    ) -> Result<Self> {
-        let db_path = Self::get_default_db_path()?;
-        Self::open_from_path(&db_path, table_configs)
-    }
-
-    // opens a db connection at a test db path
-    pub(crate) fn open_test(
-        table_configs: &Vec<TableConfig>,
-    ) -> Result<Self> {
-        Self::open_in_memory(table_configs)
-    }
-
-    fn get_default_db_path() -> Result<PathBuf> {
-        let dirs = directories::ProjectDirs::from(
-            "",
-            "",
-            "training_assistant",
-        )
-        .ok_or(Error::FileError(
-            "Failed to get data directory".into(),
-        ))?;
-        Ok(dirs.data_dir().join("data/data.db"))
-    }
-
-    fn open_in_memory(
-        table_configs: &Vec<TableConfig>,
-    ) -> Result<Self> {
-        let mut connection =
-            Connection::open_in_memory()?;
-
-        Self::setup_connection(
-            &mut connection,
-            table_configs,
-        )?;
-
-        Ok(Self {
-            connection: Some(connection),
-            db_path: None,
-        })
-    }
-
-    // opens a db connection from the specified path
-    fn open_from_path(
-        path: &PathBuf,
-        table_configs: &Vec<TableConfig>,
-    ) -> Result<Self> {
-        println!(
-            "opening database connection at {:?}",
-            path
-        );
-
-        fs::create_dir_all(path.parent().unwrap())?;
-        let mut connection =
-            Connection::open(path.clone())?;
-
-        Self::setup_connection(
-            &mut connection,
-            table_configs,
-        )?;
-
-        Ok(DatabaseConnection {
-            connection: Some(connection),
-            db_path: Some(path.clone()),
-        })
-    }
-
-    fn setup_connection(
-        connection: &mut Connection,
-        table_configs: &Vec<TableConfig>,
-    ) -> Result<()> {
-        for table_config in table_configs {
-            (table_config.setup_fn)(
-                connection,
-                table_config.table_name.clone(),
-            )?;
-        }
         Ok(())
     }
 }
@@ -341,95 +281,6 @@ pub trait FieldType {
         Self: Sized;
 }
 
-impl FieldType for String {
-    fn sql_type() -> &'static str {
-        "TEXT"
-    }
-    fn from_table_field(
-        db_connection: &mut DatabaseConnection,
-        table_name: String,
-        row_id: RowId,
-        field_name: String,
-    ) -> Result<Self> {
-        db_connection.get_field_in_table_row::<String>(
-            table_name, row_id, field_name,
-        )
-    }
-}
-
-impl FieldType for i32 {
-    fn sql_type() -> &'static str {
-        "INTEGER"
-    }
-    fn from_table_field(
-        db_connection: &mut DatabaseConnection,
-        table_name: String,
-        row_id: RowId,
-        field_name: String,
-    ) -> Result<Self> {
-        db_connection.get_field_in_table_row::<i32>(
-            table_name, row_id, field_name,
-        )
-    }
-}
-
-impl FieldType for i64 {
-    fn sql_type() -> &'static str {
-        "INTEGER"
-    }
-    fn from_table_field(
-        db_connection: &mut DatabaseConnection,
-        table_name: String,
-        row_id: RowId,
-        field_name: String,
-    ) -> Result<Self> {
-        db_connection.get_field_in_table_row::<i64>(
-            table_name, row_id, field_name,
-        )
-    }
-}
-
-impl FieldType for RowId {
-    fn sql_type() -> &'static str {
-        "INTEGER"
-    }
-    fn from_table_field(
-        db_connection: &mut DatabaseConnection,
-        table_name: String,
-        row_id: RowId,
-        field_name: String,
-    ) -> Result<Self> {
-        Ok(Self(
-            db_connection
-                .get_field_in_table_row::<i64>(
-                    table_name, row_id, field_name,
-                )?,
-        ))
-    }
-}
-
-impl FieldType for Vec<RowId> {
-    fn sql_type() -> &'static str {
-        "TEXT"
-    }
-    fn from_table_field(
-        db_connection: &mut DatabaseConnection,
-        table_name: String,
-        row_id: RowId,
-        field_name: String,
-    ) -> Result<Self> {
-        let s = db_connection
-            .get_field_in_table_row::<String>(
-                table_name, row_id, field_name,
-            )?;
-        let mut vec = Vec::new();
-        for v in s.split(',') {
-            let i: i64 = v.parse().unwrap();
-            vec.push(RowId(i));
-        }
-        Ok(vec)
-    }
-}
 
 /// Stores information about a trainer. Useful for holding company details.
 #[derive(TableRow)]
@@ -486,109 +337,119 @@ pub struct TableConfig {
 pub type TableSetupFn =
     fn(&mut Connection, String) -> Result<()>;
 
-/// Add this plugin to a `Context` to add default tables and
-/// basic database editing commands.
-#[derive(Default, Clone)]
-pub struct DbPlugin;
+//////////////////////////////////////////////////////
+// PRIVATE IMPLEMENTATION
+//////////////////////////////////////////////////////
 
 impl Plugin for DbPlugin {
     fn build(self, context: &mut Context) {
-        context
-            .add_command(Command::new("db")
-                .about("View and update database configuration")
-                .subcommand(Command::new("info")
-                    .about("Prints information about the database")
-                )
-                .subcommand(Command::new("erase")
-                    .about("Erases the database")
-                )
-                .subcommand(Command::new("backup")
+        add_db_commands(context);
+    }
+}
+
+fn add_db_commands(context: &mut Context) {
+    context.add_table::<Trainer>("trainer")
+        .add_table::<Client>("client");
+    context
+        .add_command(Command::new("db")
+            .about("View and update database configuration")
+            .subcommand(Command::new("info")
+                .about("Prints information about the database")
+            )
+            .subcommand(Command::new("erase")
+                .about("Erases the database")
+            )
+            .subcommand(
+                Command::new("backup")
                     .about("Copies the database to a new file")
                     .arg(
                         Arg::new("out-file")
-                        .long("out-file")
-                        .required(true)
-                        .help("File path to copy the database to (will be overwritten)")
+                            .long("out-file")
+                            .required(true)
+                            .help("File path to copy the database to (will be overwritten)")
                     )
-                )
-                .subcommand(Command::new("restore")
+            )
+            .subcommand(
+                Command::new("restore")
                     .about("Restores the database from a given file")
                     .arg(
                         Arg::new("file")
-                        .long("file")
-                        .required(true)
-                        .help("File path to restore the database from")
+                            .long("file")
+                            .required(true)
+                            .help("File path to restore the database from")
                     )
-                )
-                .subcommand_required(true),
-                process_db_command)
-            .add_table::<Trainer>("trainer")
-            .add_table::<Client>("client");
-        context.add_command(Command::new("new")
+            )
+            .subcommand_required(true),
+            process_db_command)
+        .add_command(Command::new("new")
             .about("Add a new row to a table")
-            .arg(Arg::new("table").long("table").required(true).help("Name of the table to add a row in")),
+            .arg(
+                Arg::new("table")
+                    .long("table")
+                    .required(true)
+                    .help("Name of the table to add a row in")
+            ),
             process_new_command
-        );
-        context.add_command(
+        )
+        .add_command(
             Command::new("remove").alias("rm")
                 .about("Removes a row from a table")
                 .arg(
                     Arg::new("table")
-                    .long("table")
-                    .required(true)
-                    .help("Name of the table to remove a row from")
+                        .long("table")
+                        .required(true)
+                        .help("Name of the table to remove a row from")
                 )
                 .arg(
                     Arg::new("row-id")
-                    .long("row-id")
-                    .value_parser(clap::value_parser!(i64))
-                    .required(true)
-                    .help("Row ID to remove")
+                        .long("row-id")
+                        .value_parser(clap::value_parser!(i64))
+                        .required(true)
+                        .help("Row ID to remove")
                 ),
             process_remove_command
-        );
-        context.add_command(
+        )
+        .add_command(
             Command::new("list").alias("ls")
                 .about("Lists the rows of a table")
                 .arg(
                     Arg::new("table")
-                    .long("table")
-                    .required(true)
-                    .help("Name of the table to list rows from")
+                        .long("table")
+                        .required(true)
+                        .help("Name of the table to list rows from")
                 ),
             process_list_command
-        );
-        context.add_command(
+        )
+        .add_command(
             Command::new("set")
                 .about("Sets a field in the given table and row.")
                 .arg(
                     Arg::new("table")
-                    .long("table")
-                    .required(true)
-                    .help("Name of the table to to modify")
+                        .long("table")
+                        .required(true)
+                        .help("Name of the table to to modify")
                 )
                 .arg(
                     Arg::new("row-id")
-                    .long("row-id")
-                    .value_parser(clap::value_parser!(i64))
-                    .required(true)
-                    .help("Row ID to modify")
+                        .long("row-id")
+                        .value_parser(clap::value_parser!(i64))
+                        .required(true)
+                        .help("Row ID to modify")
                 )
                 .arg(
                     Arg::new("field")
-                    .long("field")
-                    .required(true)
-                    .help("Name of the field to modify")
+                        .long("field")
+                        .required(true)
+                        .help("Name of the field to modify")
                 )
                 .arg(
                     Arg::new("value")
-                    .long("value")
-                    .required(true)
-                    .help("Value to set the field to")
+                        .long("value")
+                        .required(true)
+                        .help("Value to set the field to")
                 ),
             process_set_command
         );
-    }
 }
 
 fn erase_db(
@@ -704,6 +565,196 @@ fn process_remove_command(
         .expect("Couldn't remove row from table");
 
     Ok(CommandResponse::default())
+}
+
+impl DatabaseConnection {
+    // opens a db connection at the default db path
+    pub(crate) fn open_default(
+        table_configs: &Vec<TableConfig>,
+    ) -> Result<Self> {
+        let db_path = Self::get_default_db_path()?;
+        Self::open_from_path(&db_path, table_configs)
+    }
+
+    // opens a db connection at a test db path
+    pub(crate) fn open_test(
+        table_configs: &Vec<TableConfig>,
+    ) -> Result<Self> {
+        Self::open_in_memory(table_configs)
+    }
+
+    fn get_default_db_path() -> Result<PathBuf> {
+        // get the cache directory for this
+        // application
+        let dirs = directories::ProjectDirs::from(
+            "",
+            "",
+            "training_assistant",
+        )
+        // translate to an error if it failed
+        .ok_or(Error::FileError(
+            "Failed to get data directory".into(),
+        ))?;
+
+        Ok(dirs.data_dir().join("data/data.db"))
+    }
+
+    fn open_in_memory(
+        table_configs: &Vec<TableConfig>,
+    ) -> Result<Self> {
+        // create the database in memory
+        let mut connection =
+            Connection::open_in_memory()?;
+
+        // run the connection setup to ensure
+        // tables exist
+        Self::setup_connection(
+            &mut connection,
+            table_configs,
+        )?;
+
+        Ok(Self {
+            connection: Some(connection),
+            db_path: None,
+        })
+    }
+
+    // opens a db connection from the specified path
+    fn open_from_path(
+        path: &PathBuf,
+        table_configs: &Vec<TableConfig>,
+    ) -> Result<Self> {
+        // create the directories leading to 
+        // the db path
+        fs::create_dir_all(path.parent().unwrap())?;
+        
+        // open the database connection
+        let mut connection =
+            Connection::open(path.clone())?;
+
+        // run the connection setup to ensure
+        // tables exist
+        Self::setup_connection(
+            &mut connection,
+            table_configs,
+        )?;
+
+        Ok(DatabaseConnection {
+            connection: Some(connection),
+            db_path: Some(path.clone()),
+        })
+    }
+
+    fn setup_connection(
+        connection: &mut Connection,
+        table_configs: &Vec<TableConfig>,
+    ) -> Result<()> {
+        for table_config in table_configs {
+            (table_config.setup_fn)(
+                connection,
+                table_config.table_name.clone(),
+            )?;
+        }
+        Ok(())
+    }
+
+    fn get_connection_if_exists(&self) -> Result<&Connection> {
+        if let Some(connection) = &self.connection {
+            Ok(connection)
+        } else {
+            Err(Error::NoConnectionError)
+        }
+    }
+}
+
+impl FieldType for String {
+    fn sql_type() -> &'static str {
+        "TEXT"
+    }
+    fn from_table_field(
+        db_connection: &mut DatabaseConnection,
+        table_name: String,
+        row_id: RowId,
+        field_name: String,
+    ) -> Result<Self> {
+        db_connection.get_field_in_table_row::<String>(
+            table_name, row_id, field_name,
+        )
+    }
+}
+
+impl FieldType for i32 {
+    fn sql_type() -> &'static str {
+        "INTEGER"
+    }
+    fn from_table_field(
+        db_connection: &mut DatabaseConnection,
+        table_name: String,
+        row_id: RowId,
+        field_name: String,
+    ) -> Result<Self> {
+        db_connection.get_field_in_table_row::<i32>(
+            table_name, row_id, field_name,
+        )
+    }
+}
+
+impl FieldType for i64 {
+    fn sql_type() -> &'static str {
+        "INTEGER"
+    }
+    fn from_table_field(
+        db_connection: &mut DatabaseConnection,
+        table_name: String,
+        row_id: RowId,
+        field_name: String,
+    ) -> Result<Self> {
+        db_connection.get_field_in_table_row::<i64>(
+            table_name, row_id, field_name,
+        )
+    }
+}
+
+impl FieldType for RowId {
+    fn sql_type() -> &'static str {
+        "INTEGER"
+    }
+    fn from_table_field(
+        db_connection: &mut DatabaseConnection,
+        table_name: String,
+        row_id: RowId,
+        field_name: String,
+    ) -> Result<Self> {
+        Ok(Self(
+            db_connection
+                .get_field_in_table_row::<i64>(
+                    table_name, row_id, field_name,
+                )?,
+        ))
+    }
+}
+
+impl FieldType for Vec<RowId> {
+    fn sql_type() -> &'static str {
+        "TEXT"
+    }
+    fn from_table_field(
+        db_connection: &mut DatabaseConnection,
+        table_name: String,
+        row_id: RowId,
+        field_name: String,
+    ) -> Result<Self> {
+        let s = db_connection
+            .get_field_in_table_row::<String>(
+                table_name, row_id, field_name,
+            )?;
+        let mut vec = Vec::new();
+        for v in s.split(',') {
+            let i: i64 = v.parse().unwrap();
+            vec.push(RowId(i));
+        }
+        Ok(vec)
+    }
 }
 
 #[cfg(test)]
