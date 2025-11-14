@@ -49,7 +49,7 @@ pub mod prelude {
         context::{CommandResponse, Context, Plugin},
         db::{
             Client, DbConnection, DbPlugin,
-            FieldType, RowId, TableConfig, TableRow,
+            TableField, RowId, TableConfig, TableRow,
             Trainer,
         },
     };

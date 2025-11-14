@@ -261,7 +261,7 @@ impl Client {
 
 /// A trait for types stored in a SQL database. Useful
 /// for translating data from SQL to Rust.
-pub trait FieldType {
+pub trait TableField {
     /// Gets the SQL data type (`INTEGER`, `TEXT`, etc)
     fn sql_type() -> &'static str;
 
@@ -667,7 +667,7 @@ impl DbConnection {
     }
 }
 
-impl FieldType for String {
+impl TableField for String {
     fn sql_type() -> &'static str {
         "TEXT"
     }
@@ -683,7 +683,7 @@ impl FieldType for String {
     }
 }
 
-impl FieldType for i32 {
+impl TableField for i32 {
     fn sql_type() -> &'static str {
         "INTEGER"
     }
@@ -699,7 +699,7 @@ impl FieldType for i32 {
     }
 }
 
-impl FieldType for i64 {
+impl TableField for i64 {
     fn sql_type() -> &'static str {
         "INTEGER"
     }
@@ -715,7 +715,7 @@ impl FieldType for i64 {
     }
 }
 
-impl FieldType for RowId {
+impl TableField for RowId {
     fn sql_type() -> &'static str {
         "INTEGER"
     }
@@ -734,7 +734,7 @@ impl FieldType for RowId {
     }
 }
 
-impl FieldType for Vec<RowId> {
+impl TableField for Vec<RowId> {
     fn sql_type() -> &'static str {
         "TEXT"
     }
