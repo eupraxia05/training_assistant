@@ -254,9 +254,18 @@ pub trait TableRow: Sized + std::fmt::Debug {
         table_name: String,
         row_id: RowId,
     ) -> Result<Self>;
-
+    
+    /// Pushes a record into a `tabled::TableBuilder`
+    /// containing the names of each field.
+    /// Called once at the beginning, then
+    /// `push_tabled_record` is called for each
+    /// subsequent row.
     fn push_tabled_header(builder: &mut TabledBuilder);
 
+    /// Pushes a record into a `tabled::TableBuilder`
+    /// containing the values of each field.
+    /// Called for each row in a table, after
+    /// `push_tabled_header`.
     fn push_tabled_record(builder: &mut TabledBuilder, db_connection: &DbConnection, table_name: String, row_id: RowId);
 }
 
@@ -924,6 +933,15 @@ mod test {
         assert_eq!(new_response.text().unwrap(), "Inserted new row (id: 1) in table trainer.");
         assert_eq!(context.db_connection()?.get_table_row_ids("trainer")?, vec![1]); 
 
+        let list_response = context.execute("list --table=trainer")?;
+        println!("{}", list_response.text().unwrap());
+        assert_eq!(list_response.text().unwrap(), 
+            "+----+------+--------------+---------+-------+-------+\n\
+            | ID | name | company_name | address | email | phone |\n\
+            +----+------+--------------+---------+-------+-------+\n\
+            | 1  | Err  |              |         |       |       |\n\
+            +----+------+--------------+---------+-------+-------+"
+        );
         context.execute("db erase")?;
         assert!(!context.db_connection()?.is_open());
 
