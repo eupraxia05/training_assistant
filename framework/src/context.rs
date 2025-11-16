@@ -123,6 +123,8 @@ impl Context {
         self.tables.push(TableConfig {
             table_name: table_name.into(),
             setup_fn: R::setup,
+            push_tabled_header_fn: R::push_tabled_header,
+            push_tabled_record_fn: R::push_tabled_record,
         });
 
         self
@@ -143,10 +145,10 @@ impl Context {
         &self,
     ) -> Result<DbConnection> {
         if self.open_db_in_memory {
-            DbConnection::open_test(&self.tables)
+            DbConnection::open_test(self.tables.clone())
         } else {
             DbConnection::open_default(
-                &self.tables,
+                self.tables.clone(),
             )
         }
     }

@@ -487,6 +487,7 @@ dependencies = [
  "framework_derive_macros",
  "latex",
  "rusqlite",
+ "tabled",
 ]
 
 [[package]]

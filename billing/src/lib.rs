@@ -190,7 +190,7 @@ pub fn create_invoice(
     Ok(())
 }
 
-#[derive(TableRow)]
+#[derive(TableRow, Debug)]
 pub struct Invoice {
     pub client: RowId,
     pub trainer: RowId,
@@ -201,7 +201,7 @@ pub struct Invoice {
     pub charges: Vec<RowId>,
 }
 
-#[derive(TableRow)]
+#[derive(TableRow, Debug)]
 pub struct Charge {
     pub date: String,
     pub description: String,

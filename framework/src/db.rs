@@ -10,7 +10,7 @@ use rusqlite::{
 use std::fs;
 use std::path::PathBuf;
 use std::fmt::{Display, Formatter};
-use tabled::{builder::Builder as TabledBuilder, settings::Style};
+use tabled::{builder::Builder as TabledBuilder};
 
 //////////////////////////////////////////////////////
 // PUBLIC API
@@ -30,6 +30,8 @@ pub struct DbConnection {
     // The filepath the database was opened from.
     // None if it's an in-memory connection.
     db_path: Option<PathBuf>,
+
+    tables: Vec<TableConfig>,
 }
 
 impl DbConnection {
@@ -233,7 +235,7 @@ impl Display for RowId {
 /// A trait implemented by a struct to define a table's columns.
 /// Use the `framework_derive_macros::TableRow` derive macro to
 /// implement this trait automatically.
-pub trait TableRow: Sized {
+pub trait TableRow: Sized + std::fmt::Debug {
     /// Called when a connection is opened. Executes the appropriate
     /// SQL query to create the table if it does not exist.
     fn setup(
@@ -248,14 +250,18 @@ pub trait TableRow: Sized {
     /// * `table_name` - The name of the table to get data from.
     /// * `row_id` - The row ID to get data from.
     fn from_table_row(
-        db_connection: &mut DbConnection,
+        db_connection: &DbConnection,
         table_name: String,
         row_id: RowId,
     ) -> Result<Self>;
+
+    fn push_tabled_header(builder: &mut TabledBuilder);
+
+    fn push_tabled_record(builder: &mut TabledBuilder, db_connection: &DbConnection, table_name: String, row_id: RowId);
 }
 
 /// Contains data about a single training client.
-#[derive(TableRow)]
+#[derive(TableRow, Debug)]
 pub struct Client {
     // The client's name.
     name: String,
@@ -281,7 +287,7 @@ pub trait TableField {
     /// * `row_id` - The row ID to get data from.
     /// * `field_name` - The name of the field to get data from.
     fn from_table_field(
-        db_connection: &mut DbConnection,
+        db_connection: &DbConnection,
         table_name: String,
         row_id: RowId,
         field_name: String,
@@ -292,7 +298,7 @@ pub trait TableField {
 
 
 /// Stores information about a trainer. Useful for holding company details.
-#[derive(TableRow)]
+#[derive(TableRow, Debug)]
 pub struct Trainer {
     name: String,
     company_name: String,
@@ -330,6 +336,7 @@ impl Trainer {
 
 /// A configuration for a SQL table. Used when opening a
 /// database connection to ensure all needed tables exist.
+#[derive(Clone)]
 pub struct TableConfig {
     /// The name of the table.
     pub table_name: String,
@@ -338,6 +345,12 @@ pub struct TableConfig {
     /// be the `TableRow::setup` implementation for the
     /// row type.
     pub setup_fn: TableSetupFn,
+
+    /// See `PushTabledHeaderFn`.
+    pub push_tabled_header_fn: PushTabledHeaderFn,
+
+    /// See `PushTabledRecordFn`.
+    pub push_tabled_record_fn: PushTabledRecordFn,
 }
 
 /// A pointer to a function used to set up a table. Generally
@@ -345,6 +358,18 @@ pub struct TableConfig {
 /// given row type.
 pub type TableSetupFn =
     fn(&mut Connection, String) -> Result<()>;
+
+/// A pointer to a function used to push a header
+/// into a `tabled` builder. Generally points to
+/// the `TableRow::push_tabled_header` implementation
+/// for the row type.
+pub type PushTabledHeaderFn = fn (&mut TabledBuilder);
+
+/// A pointer to a function used to push a record
+/// for a table row into a `tabled` builder. Generally
+/// points to the `TableRow::push_tabled_record`
+/// implementation for the row type.
+pub type PushTabledRecordFn = fn (&mut TabledBuilder, &DbConnection, String, RowId);
 
 //////////////////////////////////////////////////////
 // PRIVATE IMPLEMENTATION
@@ -431,7 +456,7 @@ fn add_db_commands(context: &mut Context) {
         )
         .add_command(
             Command::new("set")
-                .about("Sets a field in the given table and row.")
+               .about("Sets a field in the given table and row.")
                 .arg(
                     Arg::new("table")
                         .long("table")
@@ -548,10 +573,14 @@ fn process_list_command(
     let response_text = if ids.is_empty() {
         format!("No entries in table {}.", table)
     } else {
+        let Some(table_config) = db_connection.tables.iter().find(|t| t.table_name == *table) else {
+            return Err(Error::UnknownError);
+        };
+
         let mut tabled_builder = TabledBuilder::default();
-        tabled_builder.push_record(["ID"]);
+        (table_config.push_tabled_header_fn)(&mut tabled_builder);
         for id in ids {
-            tabled_builder.push_record([format!("{}", id)]);
+            (table_config.push_tabled_record_fn)(&mut tabled_builder, db_connection, table.to_string(), RowId(id))
         }
         tabled_builder.build().to_string()
     };
@@ -599,7 +628,7 @@ fn process_db_info_command(db_connection: &mut DbConnection) -> Result<CommandRe
 impl DbConnection {
     // opens a db connection at the default db path
     pub(crate) fn open_default(
-        table_configs: &Vec<TableConfig>,
+        table_configs: Vec<TableConfig>,
     ) -> Result<Self> {
         assert!(!cfg!(test));
         let db_path = Self::get_default_db_path()?;
@@ -608,7 +637,7 @@ impl DbConnection {
 
     // opens a db connection at a test db path
     pub(crate) fn open_test(
-        table_configs: &Vec<TableConfig>,
+        table_configs: Vec<TableConfig>,
     ) -> Result<Self> {
         Self::open_in_memory(table_configs)
     }
@@ -630,7 +659,7 @@ impl DbConnection {
     }
 
     fn open_in_memory(
-        table_configs: &Vec<TableConfig>,
+        table_configs: Vec<TableConfig>,
     ) -> Result<Self> {
         // create the database in memory
         let mut connection =
@@ -640,19 +669,20 @@ impl DbConnection {
         // tables exist
         Self::setup_connection(
             &mut connection,
-            table_configs,
+            &table_configs,
         )?;
 
         Ok(Self {
             connection: Some(connection),
             db_path: None,
+            tables: table_configs
         })
     }
 
     // opens a db connection from the specified path
     fn open_from_path(
         path: &PathBuf,
-        table_configs: &Vec<TableConfig>,
+        table_configs: Vec<TableConfig>,
     ) -> Result<Self> {
         // create the directories leading to 
         // the db path
@@ -666,12 +696,13 @@ impl DbConnection {
         // tables exist
         Self::setup_connection(
             &mut connection,
-            table_configs,
+            &table_configs,
         )?;
 
         Ok(DbConnection {
             connection: Some(connection),
             db_path: Some(path.clone()),
+            tables: table_configs
         })
     }
 
@@ -702,7 +733,7 @@ impl TableField for String {
         "TEXT"
     }
     fn from_table_field(
-        db_connection: &mut DbConnection,
+        db_connection: &DbConnection,
         table_name: String,
         row_id: RowId,
         field_name: String,
@@ -718,7 +749,7 @@ impl TableField for i32 {
         "INTEGER"
     }
     fn from_table_field(
-        db_connection: &mut DbConnection,
+        db_connection: &DbConnection,
         table_name: String,
         row_id: RowId,
         field_name: String,
@@ -734,7 +765,7 @@ impl TableField for i64 {
         "INTEGER"
     }
     fn from_table_field(
-        db_connection: &mut DbConnection,
+        db_connection: &DbConnection,
         table_name: String,
         row_id: RowId,
         field_name: String,
@@ -750,7 +781,7 @@ impl TableField for RowId {
         "INTEGER"
     }
     fn from_table_field(
-        db_connection: &mut DbConnection,
+        db_connection: &DbConnection,
         table_name: String,
         row_id: RowId,
         field_name: String,
@@ -769,7 +800,7 @@ impl TableField for Vec<RowId> {
         "TEXT"
     }
     fn from_table_field(
-        db_connection: &mut DbConnection,
+        db_connection: &DbConnection,
         table_name: String,
         row_id: RowId,
         field_name: String,
@@ -801,7 +832,7 @@ mod test {
         }
     }
 
-    #[derive(TableRow)]
+    #[derive(TableRow, Debug)]
     struct TestTableRow {
         bar: String,
     }

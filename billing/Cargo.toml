@@ -10,6 +10,7 @@ framework = { version = "0.1.0", path = "../framework" }
 clap = "4.5.50"
 rusqlite = "0.37.0"
 framework_derive_macros = { version = "0.1.0", path = "../framework_derive_macros" }
+tabled = "0.20.0"
 
 [lints]
 workspace = true

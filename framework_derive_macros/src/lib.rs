@@ -58,6 +58,7 @@ fn generate_table_row_impl(
             parsed_fields,
         );
     let from_table_row_fn_definition = generate_table_row_from_table_row_fn_definition(parsed_fields);
+    let tabled_fn_definitions = generate_tabled_fn_definitions(parsed_fields);
 
     let struct_name = parsed_struct.name.clone();
 
@@ -66,6 +67,8 @@ fn generate_table_row_impl(
             #setup_fn_definition
 
             #from_table_row_fn_definition
+
+            #tabled_fn_definitions
         }
     }
 }
@@ -146,7 +149,7 @@ fn generate_table_row_from_table_row_fn_definition(
 
     quote::quote! {
         fn from_table_row(
-            db_connection: &mut DbConnection,
+            db_connection: &DbConnection,
             table_name: String,
             row_id: RowId
         ) -> Result<Self>
@@ -154,6 +157,35 @@ fn generate_table_row_from_table_row_fn_definition(
             #from_table_row_fn_body
         }
     }
+}
+
+fn generate_tabled_fn_definitions(fields: &venial::NamedFields) -> proc_macro2::TokenStream {
+    let mut fields_args = proc_macro2::TokenStream::new();
+
+    for (field, _) in fields.fields.iter() {
+        fields_args.extend(format!("\"{}\", ", field.name.to_string()).parse::<proc_macro2::TokenStream>());
+    }
+
+    let mut record_fields_args = proc_macro2::TokenStream::new();
+    for (field, _) in fields.fields.iter() {
+        let field_str = format!("format!(\"{{:?}}\", record.{}), ", field.name.to_string());
+        record_fields_args.extend(field_str.parse::<proc_macro2::TokenStream>());
+    }
+
+    quote::quote!(
+        fn push_tabled_header(builder: &mut tabled::builder::Builder) {
+            builder.push_record(["ID", #fields_args]);
+        }
+
+        fn push_tabled_record(builder: &mut tabled::builder::Builder, db_connection: &DbConnection, table_name: String, row_id: RowId) {
+            let Ok(record) = Self::from_table_row(db_connection, table_name, row_id) else {
+                builder.push_record([row_id.0.to_string(), "Err".to_string()]);
+                return;
+            };
+            println!("{:?}", record);
+            builder.push_record([row_id.0.to_string(), #record_fields_args]);
+        }
+    )
 }
 
 // converts a parsed type expression to a type we can use for namespaced function calls
