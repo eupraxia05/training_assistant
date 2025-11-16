@@ -7,6 +7,8 @@ fn main() {
         .add_plugin(DbPlugin)
         .add_plugin(InvoicePlugin);
 
+    context.startup();
+
     let mut command_args =
         std::env::args().collect::<Vec<_>>();
 
@@ -14,7 +16,7 @@ fn main() {
     // todo: this isn't guaranteed to be the executable name, should probably check it's what we expect
     command_args.remove(0);
 
-    context
+    let response = context
         .execute(
             shlex::try_join(
                 command_args
@@ -23,6 +25,16 @@ fn main() {
             )
             .expect("failed to join args")
             .as_str(),
-        )
-        .expect("command failed");
+        );
+    
+    match response {
+        Ok(r) => {
+            if let Some(text) = r.text() {
+                println!("{}", text);
+            }
+        },
+        Err(e) => {
+            println!("error: {:?}", e);
+        }
+    }
 }

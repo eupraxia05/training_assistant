@@ -36,11 +36,16 @@ use std::ffi::OsString;
 ///
 /// # fn main() -> Result<()> {
 /// let mut context = Context::new();
+/// # context.in_memory_db(true);
 /// context.add_plugin(MyPlugin);
-/// let db_connection = context.open_db_connection()?;
+/// context.startup()?;
+/// let db_connection = context.db_connection()?;
 /// # Ok(())
 /// # }
 /// ```
+// TODO: the add-plugins -> setup -> get connection pattern
+// seems error prone. Probably better to split the first
+// step into a builder.
 pub struct Context {
     /// The `Plugin`s registered with this `Context`.
     /// Add one with `Context::add_plugin`.
@@ -54,6 +59,13 @@ pub struct Context {
     /// opening a database connection. Add a table
     /// with `Context::add_table`.
     tables: Vec<TableConfig>,
+
+    /// The database connection this Context creates.
+    /// Opened when `startup` is called.
+    db_connection: Option<DbConnection>,
+
+    /// Whether or not the db connection should be opened in memory.
+    open_db_in_memory: bool,
 }
 
 impl Context {
@@ -64,6 +76,8 @@ impl Context {
             plugins: Vec::default(),
             commands: Vec::default(),
             tables: Vec::default(),
+            db_connection: None,
+            open_db_in_memory: false,
         }
     }
 
@@ -114,18 +128,46 @@ impl Context {
         self
     }
 
+    /// Sets whether or not the database should be
+    /// opened in-memory. Useful for testing.
+    /// Defaults to `false` and does not need to
+    /// be called if a db file is desired.
+    pub fn in_memory_db(&mut self, in_memory: bool) {
+        self.open_db_in_memory = in_memory;
+    }
+
     /// Opens a database connection. Uses the default
     /// db path, unless built in test config, in
     /// which case it uses a separate test db path.
-    pub fn open_db_connection(
+    fn open_db_connection(
         &self,
     ) -> Result<DbConnection> {
-        if cfg!(test) {
+        if self.open_db_in_memory {
             DbConnection::open_test(&self.tables)
         } else {
             DbConnection::open_default(
                 &self.tables,
             )
+        }
+    }
+
+    /// Call this after adding plugins, tables, and 
+    /// commands. Opens a connection to the database.
+    pub fn startup(&mut self) -> Result<()> {
+        self.db_connection = Some(self.open_db_connection()?);
+
+        Ok(())
+    }
+
+    /// Gets the database connection. Must be called 
+    /// after `setup`. Returns 
+    /// `Err(Error::NoConnectionError)` if the
+    /// connection has not been created yet.
+    pub fn db_connection(&mut self) -> Result<&mut DbConnection> {
+        if let Some(db_connection) = &mut self.db_connection {
+            Ok(db_connection)
+        } else {
+            Err(Error::NoConnectionError)
         }
     }
 
@@ -140,14 +182,20 @@ impl Context {
     /// # fn main() -> Result<()> {
     /// # let mut context = Context::new();
     /// # context.add_plugin(DbPlugin);
+    /// # context.in_memory_db(true);
+    /// # context.startup()?;
     /// context.execute("new --table trainer")?;
     /// # Ok(())
     /// # }
     /// ```
     pub fn execute(
-        &self,
+        &mut self,
         command_str: &str,
     ) -> Result<CommandResponse> {
+        let Some(db_connection) = &mut self.db_connection else {
+            return Err(Error::NoConnectionError);
+        };
+
         // todo: this uses `tacl` as a dummy binary name
         // to make clap argument parsing work, but
         // it seems silly.
@@ -171,9 +219,6 @@ impl Context {
         let matches =
             command.get_matches_from(cmd_string);
 
-        let mut database_connection =
-            self.open_db_connection()?;
-
         if let Some(subcommand_name) =
             matches.subcommand_name()
         {
@@ -186,7 +231,7 @@ impl Context {
                 {
                     let response = f(
                         subcommand_matches,
-                        &mut database_connection,
+                        db_connection,
                     )?;
                     return Ok(response);
                 }
@@ -214,15 +259,15 @@ impl CommandResponse {
     /// Creates a new CommandResponse with a
     /// text response. Use `Default::default()`
     /// to create a response without text.
-    pub fn new(text: &str) -> Self {
+    pub fn new(text: impl Into<String>) -> Self {
         Self {
             text: Some(text.into()),
         }
     }
 
-    /// Gets the text of the response, if it exists.
-    pub fn text(&self) -> &Option<String> {
-        &self.text
+    /// Gets a copy of the text of the response, if it exists.
+    pub fn text(&self) -> Option<String> {
+        self.text.clone()
     }
 }
 
@@ -289,7 +334,9 @@ mod test {
         context.add_plugin::<TestPlugin>(
             TestPlugin::default(),
         );
+        context.in_memory_db(true);
         assert_eq!(context.commands.len(), 2);
+        context.startup()?;
         let response = context.execute("test")?;
         assert_eq!(
             COMMAND_EXECUTED_COUNTER

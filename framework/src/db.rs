@@ -9,6 +9,8 @@ use rusqlite::{
 };
 use std::fs;
 use std::path::PathBuf;
+use std::fmt::{Display, Formatter};
+use tabled::{builder::Builder as TabledBuilder, settings::Style};
 
 //////////////////////////////////////////////////////
 // PUBLIC API
@@ -143,12 +145,12 @@ impl DbConnection {
     /// * `table` - The name of the table to get row IDs from.
     pub fn get_table_row_ids(
         &self,
-        table: String,
+        table: impl Into<String>,
     ) -> Result<Vec<i64>> {
         let connection = self.get_connection_if_exists()?;
 
         let mut select = connection.prepare(
-            format!("SELECT id FROM {}", table)
+            format!("SELECT id FROM {}", table.into())
                 .as_str(),
         )?;
 
@@ -168,9 +170,9 @@ impl DbConnection {
     /// * `field_name` - The field name to get.
     pub fn get_field_in_table_row<F>(
         &self,
-        table: String,
+        table: impl Into<String>,
         row_id: RowId,
-        field_name: String,
+        field_name: impl Into<String>,
     ) -> Result<F>
     where
         F: FromSql,
@@ -180,7 +182,7 @@ impl DbConnection {
         let mut select = connection.prepare(
             format!(
                 "SELECT {} FROM {} WHERE id = ?1",
-                field_name, table
+                field_name.into(), table.into()
             )
             .as_str(),
         )?; //, params![row_id.0]);
@@ -199,7 +201,7 @@ impl DbConnection {
     /// * `row_id` - The row ID to remove.
     pub fn remove_row_in_table(
         &self,
-        table: String,
+        table: impl Into<String>,
         row_id: RowId,
     ) -> Result<()> {
         let connection = self.get_connection_if_exists()?;
@@ -207,7 +209,7 @@ impl DbConnection {
         connection.execute(
             format!(
                 "DELETE FROM {} WHERE id = ?1",
-                table
+                table.into()
             )
             .as_str(),
             [row_id.0],
@@ -220,6 +222,13 @@ impl DbConnection {
 /// Used to identify a unique row in a table.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct RowId(pub i64);
+
+impl Display for RowId {
+    fn fmt(&self, f: &mut Formatter) -> std::result::Result<(), std::fmt::Error> {
+        write!(f, "{}", self.0)?;
+        Ok(())
+    }
+}
 
 /// A trait implemented by a struct to define a table's columns.
 /// Use the `framework_derive_macros::TableRow` derive macro to
@@ -463,21 +472,19 @@ fn process_db_command(
     matches: &ArgMatches,
     db_connection: &mut DbConnection,
 ) -> Result<CommandResponse> {
-    let response = match matches.subcommand() {
+    match matches.subcommand() {
         Some(("info", _)) => {
-            CommandResponse::default()
+            process_db_info_command(db_connection)
         }
-        Some(("erase", _)) => erase_db(db_connection)?,
+        Some(("erase", _)) => erase_db(db_connection),
         Some(("backup", _)) => {
-            CommandResponse::default()
+            Ok(CommandResponse::default())
         }
         Some(("restore", _)) => {
-            CommandResponse::default()
+            Ok(CommandResponse::default())
         }
-        _ => CommandResponse::default(),
-    };
-
-    Ok(response)
+        _ => Ok(CommandResponse::default()),
+    }
 }
 
 fn process_new_command(
@@ -487,11 +494,13 @@ fn process_new_command(
     let table: &String = arg_matches
         .get_one::<String>("table")
         .expect("Missing required argument");
-    db_connection
+    let new_row_id = db_connection
         .new_row_in_table(table.clone())
         .expect("couldn't insert new row!");
 
-    Ok(CommandResponse::default())
+    Ok(CommandResponse::new(
+        format!("Inserted new row (id: {}) in table {}.", new_row_id, table)
+    ))
 }
 
 fn process_set_command(
@@ -536,14 +545,17 @@ fn process_list_command(
         .get_table_row_ids(table.clone())
         .expect("couldn't get table row ids");
 
-    if ids.is_empty() {
-        println!("No entries in table {}", table);
+    let response_text = if ids.is_empty() {
+        format!("No entries in table {}.", table)
     } else {
+        let mut tabled_builder = TabledBuilder::default();
+        tabled_builder.push_record(["ID"]);
         for id in ids {
-            println!("{}", id);
+            tabled_builder.push_record([format!("{}", id)]);
         }
-    }
-    Ok(CommandResponse::default())
+        tabled_builder.build().to_string()
+    };
+    Ok(CommandResponse::new(response_text))
 }
 
 fn process_remove_command(
@@ -567,11 +579,29 @@ fn process_remove_command(
     Ok(CommandResponse::default())
 }
 
+fn process_db_info_command(db_connection: &mut DbConnection) -> Result<CommandResponse> {
+    let mut response_text = String::default();
+
+    if db_connection.is_open() {
+        response_text += "Database connection open.\n";
+        if let Some(db_path) = db_connection.db_path() {
+            response_text += format!("Database path: {:?}", db_path).as_str();
+        } else {
+            response_text += "No database path (in-memory connection)";
+        }
+    } else {
+        response_text += "No database connection open.";
+    }
+
+    Ok(CommandResponse::new(response_text))
+}
+
 impl DbConnection {
     // opens a db connection at the default db path
     pub(crate) fn open_default(
         table_configs: &Vec<TableConfig>,
     ) -> Result<Self> {
+        assert!(!cfg!(test));
         let db_path = Self::get_default_db_path()?;
         Self::open_from_path(&db_path, table_configs)
     }
@@ -777,28 +807,95 @@ mod test {
     }
 
     #[test]
-    fn db_test_1() -> Result<()> {
+    fn db_table_ops_test() -> Result<()> {
+        // create a context and add our test plugin
         let mut context = Context::new();
         context.add_plugin(TestPlugin);
+        context.in_memory_db(true);
+
+        context.startup()?;
+
+        // open the db connection
         let mut db_connection =
-            context.open_db_connection()?;
+            context.db_connection()?;
+
+        // check the db connection is open
+        assert!(db_connection.is_open());
+
         // test db connection shouldn't have a file path
         assert!(db_connection.db_path().is_none());
+        
+        // insert a row and check the inserted row is 
+        // row 1
+        // (the table was empty)
         let inserted_row =
             db_connection.new_row_in_table("foo")?;
         assert_eq!(inserted_row.0, 1);
+       
+        // check the table row IDs returned are just
+        // our newly created row
+        let table_row_ids = db_connection.get_table_row_ids("foo")?;
+        assert_eq!(table_row_ids, vec![1]);
+       
+        // set a field in the created row
         db_connection.set_field_in_table(
             "foo",
             inserted_row,
             "bar",
             "foobar",
         )?;
+
+        // ensure the field matches
+        let field = db_connection.get_field_in_table_row::<String>(
+            "foo", 
+            inserted_row, 
+            "bar"
+        )?;
+        assert_eq!(field, "foobar");
+
+        // get the table row and ensure the field matches
         let table_row = TestTableRow::from_table_row(
             &mut db_connection,
             "foo".into(),
             inserted_row,
         )?;
         assert_eq!(table_row.bar, "foobar");
+
+        // delete the row
+        db_connection.remove_row_in_table("foo", inserted_row)?;
+
+        // ensure the table row IDs are empty
+        let table_row_ids_2 = db_connection.get_table_row_ids("foo")?;
+        assert_eq!(table_row_ids_2.len(), 0);
+
+        // delete the db. this one is in memory, so it
+        // should just close the connection
+        db_connection.delete_db()?;
+
+        Ok(())
+    }
+
+    #[test]
+    fn db_commands_test() -> Result<()> {
+        let mut context = Context::new();
+        context.add_plugin(DbPlugin);
+        context.in_memory_db(true);
+
+        context.startup()?;
+
+        let info_response = context.execute("db info")?;
+        assert!(info_response.text().is_some());
+        assert!(info_response.text().unwrap() == "Database connection open.\nNo database path (in-memory connection)");
+
+        assert_eq!(context.db_connection()?.get_table_row_ids("trainer")?, vec![]);
+        let new_response = context.execute("new --table=trainer")?;
+        assert!(new_response.text().is_some());
+        assert_eq!(new_response.text().unwrap(), "Inserted new row (id: 1) in table trainer.");
+        assert_eq!(context.db_connection()?.get_table_row_ids("trainer")?, vec![1]); 
+
+        context.execute("db erase")?;
+        assert!(!context.db_connection()?.is_open());
+
         Ok(())
     }
 }
