@@ -11,6 +11,11 @@ use std::fs;
 use std::path::PathBuf;
 use std::fmt::{Display, Formatter};
 use tabled::{builder::Builder as TabledBuilder};
+use ratatui::{
+    style::Stylize,
+    text::Line,
+    widgets::{Block, Paragraph}
+};
 
 //////////////////////////////////////////////////////
 // PUBLIC API
@@ -31,6 +36,9 @@ pub struct DbConnection {
     // None if it's an in-memory connection.
     db_path: Option<PathBuf>,
 
+    // The tables this connection was created with.
+    // TODO: this is duplicated between here and
+    // Context
     tables: Vec<TableConfig>,
 }
 
@@ -116,7 +124,7 @@ impl DbConnection {
     /// * `row_id` - The id of the row.
     /// * `field` - The field name.
     /// * `value` - The value to set (must
-    ///     implement `ToSql`)
+    ///   implement `ToSql`)
     pub fn set_field_in_table<V>(
         &mut self,
         table: impl Into<String>,
@@ -187,7 +195,7 @@ impl DbConnection {
                 field_name.into(), table.into()
             )
             .as_str(),
-        )?; //, params![row_id.0]);
+        )?;
 
         select
             .query_one([row_id.0], |t| t.get(0))
@@ -492,6 +500,11 @@ fn add_db_commands(context: &mut Context) {
                         .help("Value to set the field to")
                 ),
             process_set_command
+        )
+        .add_command(
+            Command::new("edit")
+                .about("Edits a table row in TUI mode."), 
+            process_edit_command
         );
 }
 
@@ -619,7 +632,6 @@ fn process_remove_command(
 
 fn process_db_info_command(db_connection: &mut DbConnection) -> Result<CommandResponse> {
     let mut response_text = String::default();
-
     if db_connection.is_open() {
         response_text += "Database connection open.\n";
         if let Some(db_path) = db_connection.db_path() {
@@ -632,6 +644,22 @@ fn process_db_info_command(db_connection: &mut DbConnection) -> Result<CommandRe
     }
 
     Ok(CommandResponse::new(response_text))
+}
+
+fn process_edit_command(arg_matches: &ArgMatches, db_connection: &mut DbConnection) -> Result<CommandResponse> {
+    Ok(CommandResponse::new("Starting TUI session...").request_tui(render_edit_tui))
+}
+
+fn render_edit_tui(frame: &mut ratatui::Frame) {
+    let paragraph = Paragraph::new("dingus")
+        .centered()
+        .block(
+            Block::bordered()
+                .title(Line::from("Editing".bold()).centered())
+                .title_bottom(Line::from("Exit <Q>".bold()).centered())
+        );
+        
+    frame.render_widget(paragraph, frame.area());
 }
 
 impl DbConnection {

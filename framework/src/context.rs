@@ -255,7 +255,11 @@ impl Default for Context {
 #[derive(Default)]
 pub struct CommandResponse {
     text: Option<String>,
+    tui_requested: bool,
+    tui_render_fn: Option<TuiRenderFn>,
 }
+
+pub type TuiRenderFn = fn (&mut ratatui::Frame);
 
 impl CommandResponse {
     /// Creates a new CommandResponse with a
@@ -264,7 +268,23 @@ impl CommandResponse {
     pub fn new(text: impl Into<String>) -> Self {
         Self {
             text: Some(text.into()),
+            tui_requested: false,
+            tui_render_fn: None
         }
+    }
+
+    pub fn request_tui(mut self, tui_render_fn: TuiRenderFn) -> Self {
+        self.tui_requested = true;
+        self.tui_render_fn = Some(tui_render_fn);
+        self
+    }
+
+    pub fn tui_requested(&self) -> bool {
+        self.tui_requested
+    }
+    
+    pub fn tui_render_fn(&self) -> Option<TuiRenderFn> {
+        self.tui_render_fn
     }
 
     /// Gets a copy of the text of the response, if it exists.

@@ -46,7 +46,7 @@ impl From<std::io::Error> for Error {
 pub mod prelude {
     pub use crate::{
         Error, Result,
-        context::{CommandResponse, Context, Plugin},
+        context::{CommandResponse, Context, Plugin, TuiRenderFn},
         db::{
             Client, DbConnection, DbPlugin,
             TableField, RowId, TableConfig, TableRow,

@@ -7,6 +7,7 @@ edition = "2024"
 clap = "4.5.49"
 directories = "6.0.0"
 framework_derive_macros = { version = "0.1.0", path = "../framework_derive_macros" }
+ratatui = "0.29.0"
 rusqlite = "0.37.0"
 shlex = "1.3.0"
 tabled = "0.20.0"
