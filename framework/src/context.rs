@@ -257,9 +257,27 @@ pub struct CommandResponse {
     text: Option<String>,
     tui_requested: bool,
     tui_render_fn: Option<TuiRenderFn>,
+    tui_update_fn: Option<TuiUpdateFn>
+}
+
+#[derive(Default)]
+pub struct TuiState {
+    should_quit: bool
+}
+
+impl TuiState {
+    pub fn should_quit(&self) -> bool {
+        self.should_quit
+    }
+
+    pub fn request_quit(&mut self) {
+        self.should_quit = true;
+    }
 }
 
 pub type TuiRenderFn = fn (&mut ratatui::Frame);
+
+pub type TuiUpdateFn = fn (&mut TuiState, &crossterm::event::Event);
 
 impl CommandResponse {
     /// Creates a new CommandResponse with a
@@ -269,13 +287,15 @@ impl CommandResponse {
         Self {
             text: Some(text.into()),
             tui_requested: false,
-            tui_render_fn: None
+            tui_render_fn: None,
+            tui_update_fn: None
         }
     }
 
-    pub fn request_tui(mut self, tui_render_fn: TuiRenderFn) -> Self {
+    pub fn request_tui(mut self, tui_render_fn: TuiRenderFn, tui_update_fn: TuiUpdateFn) -> Self {
         self.tui_requested = true;
         self.tui_render_fn = Some(tui_render_fn);
+        self.tui_update_fn = Some(tui_update_fn);
         self
     }
 
@@ -285,6 +305,10 @@ impl CommandResponse {
     
     pub fn tui_render_fn(&self) -> Option<TuiRenderFn> {
         self.tui_render_fn
+    }
+
+    pub fn tui_update_fn(&self) -> Option<TuiUpdateFn> {
+        self.tui_update_fn
     }
 
     /// Gets a copy of the text of the response, if it exists.

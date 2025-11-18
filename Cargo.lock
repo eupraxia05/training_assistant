@@ -1461,6 +1461,7 @@ name = "framework"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "crossterm 0.29.0",
  "directories",
  "framework_derive_macros",
  "ratatui",

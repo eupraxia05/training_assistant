@@ -1,6 +1,6 @@
 use crate::{
     Error, Result,
-    context::{CommandResponse, Context, Plugin},
+    context::{CommandResponse, Context, Plugin, TuiState},
 };
 use clap::{Arg, ArgMatches, Command};
 use framework_derive_macros::TableRow;
@@ -16,6 +16,7 @@ use ratatui::{
     text::Line,
     widgets::{Block, Paragraph}
 };
+use crossterm::event::{Event, KeyEvent, KeyCode, KeyEventKind};
 
 //////////////////////////////////////////////////////
 // PUBLIC API
@@ -647,7 +648,7 @@ fn process_db_info_command(db_connection: &mut DbConnection) -> Result<CommandRe
 }
 
 fn process_edit_command(arg_matches: &ArgMatches, db_connection: &mut DbConnection) -> Result<CommandResponse> {
-    Ok(CommandResponse::new("Starting TUI session...").request_tui(render_edit_tui))
+    Ok(CommandResponse::new("Starting TUI session...").request_tui(render_edit_tui, update_edit_tui))
 }
 
 fn render_edit_tui(frame: &mut ratatui::Frame) {
@@ -660,6 +661,19 @@ fn render_edit_tui(frame: &mut ratatui::Frame) {
         );
         
     frame.render_widget(paragraph, frame.area());
+}
+
+fn update_edit_tui(tui_state: &mut TuiState, ev: &crossterm::event::Event) {
+    match ev {
+        Event::Key(key_event) => {
+            if key_event.kind == KeyEventKind::Press {
+                if key_event.code == KeyCode::Char('q') {
+                    tui_state.request_quit();
+                }
+            }
+        }
+        _ => { }
+    }
 }
 
 impl DbConnection {
