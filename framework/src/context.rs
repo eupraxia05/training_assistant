@@ -5,6 +5,8 @@ use crate::{Error, Result};
 
 use clap::{ArgMatches, Command};
 use std::ffi::OsString;
+use std::collections::HashMap;
+use std::any::{Any, TypeId};
 
 /// A loose application-layer framework shared across
 /// command-line and GUI interfaces.
@@ -66,6 +68,8 @@ pub struct Context {
 
     /// Whether or not the db connection should be opened in memory.
     open_db_in_memory: bool,
+
+    resources: HashMap<TypeId, Box<dyn Resource>>
 }
 
 impl Context {
@@ -78,6 +82,7 @@ impl Context {
             tables: Vec::default(),
             db_connection: None,
             open_db_in_memory: false,
+            resources: HashMap::new(),
         }
     }
 
@@ -151,6 +156,24 @@ impl Context {
                 self.tables.clone(),
             )
         }
+    }
+
+    pub fn add_resource<R>(&mut self, res: R)
+        where R: Resource
+    {
+        self.resources.insert(TypeId::of::<R>(), Box::new(res));
+    }
+
+    pub fn get_resource_mut<R>(&mut self) -> Option<&mut R>
+        where R: Resource
+    {
+        let boxed = self.resources.get_mut(&TypeId::of::<R>());
+        if let Some(b) = boxed {
+            if let Some(r) = b.as_any_mut().downcast_mut::<R>() {
+                return Some(r);
+            }
+        }
+        None
     }
 
     /// Call this after adding plugins, tables, and 
@@ -232,8 +255,8 @@ impl Context {
                         )
                 {
                     let response = f(
+                        self,
                         subcommand_matches,
-                        db_connection,
                     )?;
                     return Ok(response);
                 }
@@ -275,9 +298,9 @@ impl TuiState {
     }
 }
 
-pub type TuiRenderFn = fn (&mut ratatui::Frame);
+pub type TuiRenderFn = fn (&mut Context, &mut ratatui::Frame);
 
-pub type TuiUpdateFn = fn (&mut TuiState, &crossterm::event::Event);
+pub type TuiUpdateFn = fn (&mut Context, &mut TuiState, &crossterm::event::Event);
 
 impl CommandResponse {
     /// Creates a new CommandResponse with a
@@ -318,8 +341,8 @@ impl CommandResponse {
 }
 
 type ProcessCommandFn = fn(
+    &mut Context,
     &ArgMatches,
-    &mut DbConnection,
 ) -> Result<CommandResponse>;
 
 /// An interface for adding functionality to a Context. Inspired by Bevy's plugin interface.
@@ -328,11 +351,17 @@ pub trait Plugin {
     fn build(self, context: &mut Context) -> ();
 }
 
+pub trait Resource: Any {
+    fn as_any(&self) -> &dyn Any;
+    fn as_any_mut(&mut self) -> &mut dyn Any;
+}
+
 #[cfg(test)]
 mod test {
     use crate::prelude::*;
     use clap::{ArgMatches, Command};
     use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::any::Any;
 
     #[derive(Default, Clone)]
     struct TestPlugin;
@@ -347,15 +376,26 @@ mod test {
                 Command::new("test2"),
                 process_test2_command,
             );
+            context.add_resource(TestResource::default());
         }
+    }
+
+    #[derive(Default)]
+    struct TestResource {
+        foo: i32
+    }
+
+    impl Resource for TestResource {
+        fn as_any(&self) -> &dyn Any { self }
+        fn as_any_mut(&mut self) -> &mut dyn Any { self }
     }
 
     static COMMAND_EXECUTED_COUNTER: AtomicUsize =
         AtomicUsize::new(0);
 
     fn process_test_command(
+        _context: &mut Context,
         _arg_matches: &ArgMatches,
-        _db_connection: &mut DbConnection,
     ) -> Result<CommandResponse> {
         COMMAND_EXECUTED_COUNTER
             .store(1, Ordering::Relaxed);
@@ -366,8 +406,8 @@ mod test {
         AtomicUsize::new(0);
 
     fn process_test2_command(
+        _context: &mut Context,
         _arg_matches: &ArgMatches,
-        _db_connection: &mut DbConnection,
     ) -> Result<CommandResponse> {
         COMMAND2_EXECUTED_COUNTER
             .store(1, Ordering::Relaxed);
@@ -375,7 +415,7 @@ mod test {
     }
 
     #[test]
-    fn plugin_with_commands_test() -> Result<()> {
+    fn plugin_test() -> Result<()> {
         let mut context = Context::new();
         context.add_plugin::<TestPlugin>(
             TestPlugin::default(),
@@ -401,6 +441,11 @@ mod test {
             response2.text().clone().unwrap(),
             "foobar"
         );
+        let res = context.get_resource_mut::<TestResource>();
+        assert!(res.is_some());
+        assert_eq!(res.as_ref().unwrap().foo, 0);
+        res.unwrap().foo = 42;
+        assert_eq!(context.get_resource_mut::<TestResource>().unwrap().foo, 42);
         Ok(())
     }
 }

@@ -1,6 +1,6 @@
 use crate::{
     Error, Result,
-    context::{CommandResponse, Context, Plugin, TuiState},
+    context::{CommandResponse, Context, Plugin, TuiState, Resource},
 };
 use clap::{Arg, ArgMatches, Command};
 use framework_derive_macros::TableRow;
@@ -17,6 +17,7 @@ use ratatui::{
     widgets::{Block, Paragraph}
 };
 use crossterm::event::{Event, KeyEvent, KeyCode, KeyEventKind};
+use std::any::Any;
 
 //////////////////////////////////////////////////////
 // PUBLIC API
@@ -396,6 +397,7 @@ pub type PushTabledRecordFn = fn (&mut TabledBuilder, &DbConnection, String, Row
 impl Plugin for DbPlugin {
     fn build(self, context: &mut Context) {
         add_db_commands(context);
+        context.add_resource(EditCommandTuiState::default());
     }
 }
 
@@ -504,7 +506,13 @@ fn add_db_commands(context: &mut Context) {
         )
         .add_command(
             Command::new("edit")
-                .about("Edits a table row in TUI mode."), 
+                .about("Edits a table row in TUI mode.")
+                .arg(
+                    Arg::new("table")
+                        .long("table")
+                        .required(true)
+                        .help("Name of the table to edit")
+                ),
             process_edit_command
         );
 }
@@ -517,14 +525,18 @@ fn erase_db(
 }
 
 fn process_db_command(
+    context: &mut Context,
     matches: &ArgMatches,
-    db_connection: &mut DbConnection,
 ) -> Result<CommandResponse> {
     match matches.subcommand() {
         Some(("info", _)) => {
+            let db_connection = context.db_connection().unwrap();
             process_db_info_command(db_connection)
         }
-        Some(("erase", _)) => erase_db(db_connection),
+        Some(("erase", _)) => {
+            let db_connection = context.db_connection().unwrap();
+            erase_db(db_connection)
+        }
         Some(("backup", _)) => {
             Ok(CommandResponse::default())
         }
@@ -536,9 +548,10 @@ fn process_db_command(
 }
 
 fn process_new_command(
-    arg_matches: &ArgMatches,
-    db_connection: &mut DbConnection,
+    context: &mut Context,
+    arg_matches: &ArgMatches, 
 ) -> Result<CommandResponse> {
+    let db_connection = context.db_connection().unwrap();
     let table: &String = arg_matches
         .get_one::<String>("table")
         .expect("Missing required argument");
@@ -552,9 +565,10 @@ fn process_new_command(
 }
 
 fn process_set_command(
+    context: &mut Context,
     arg_matches: &ArgMatches,
-    db_connection: &mut DbConnection,
 ) -> Result<CommandResponse> {
+    let db_connection = context.db_connection().unwrap();
     let table = arg_matches
         .get_one::<String>("table")
         .expect("Missing required argument");
@@ -582,9 +596,10 @@ fn process_set_command(
 }
 
 fn process_list_command(
+    context: &mut Context,
     arg_matches: &ArgMatches,
-    db_connection: &mut DbConnection,
 ) -> Result<CommandResponse> {
+    let db_connection = context.db_connection().unwrap();
     let table = arg_matches
         .get_one::<String>("table")
         .expect("Missing required argument");
@@ -611,9 +626,10 @@ fn process_list_command(
 }
 
 fn process_remove_command(
+    context: &mut Context,
     arg_matches: &ArgMatches,
-    db_connection: &mut DbConnection,
 ) -> Result<CommandResponse> {
+    let db_connection = context.db_connection().unwrap();
     let table = arg_matches
         .get_one::<String>("table")
         .expect("Missing required argument");
@@ -647,28 +663,59 @@ fn process_db_info_command(db_connection: &mut DbConnection) -> Result<CommandRe
     Ok(CommandResponse::new(response_text))
 }
 
-fn process_edit_command(arg_matches: &ArgMatches, db_connection: &mut DbConnection) -> Result<CommandResponse> {
+#[derive(Default)]
+struct EditCommandTuiState {
+    table: String
+}
+
+impl Resource for EditCommandTuiState {
+    fn as_any(&self) -> &dyn Any { self }
+    fn as_any_mut(&mut self) -> &mut dyn Any { self }
+}
+
+fn process_edit_command(
+    context: &mut Context,
+    arg_matches: &ArgMatches, 
+) -> Result<CommandResponse> {
+    if let Some(state) = context.get_resource_mut::<EditCommandTuiState>() {
+        state.table = arg_matches.get_one::<String>("table").unwrap().into();
+    }
     Ok(CommandResponse::new("Starting TUI session...").request_tui(render_edit_tui, update_edit_tui))
 }
 
-fn render_edit_tui(frame: &mut ratatui::Frame) {
-    let paragraph = Paragraph::new("dingus")
+fn render_edit_tui(context: &mut Context, frame: &mut ratatui::Frame) {
+    let table = if let Some(state) = context.get_resource_mut::<EditCommandTuiState>() {
+        Some(state.table.clone())
+    } else { None };
+
+    let title = format!("Editing table: {}", table.clone().unwrap_or("<err>".into()));
+
+    let db_connection = context.db_connection().unwrap();
+
+    let row_ids = db_connection.get_table_row_ids(table.unwrap_or_default()).unwrap();
+
+    let body = format!("{} rows", row_ids.len());
+
+    let paragraph = Paragraph::new(body)
         .centered()
         .block(
             Block::bordered()
-                .title(Line::from("Editing".bold()).centered())
-                .title_bottom(Line::from("Exit <Q>".bold()).centered())
+                .title(Line::from(title.bold()).centered())
+                .title_bottom(Line::from("Exit <Q> Up <A> Down <Z>".bold()).centered())
         );
         
     frame.render_widget(paragraph, frame.area());
 }
 
-fn update_edit_tui(tui_state: &mut TuiState, ev: &crossterm::event::Event) {
+fn update_edit_tui(context: &mut Context, tui_state: &mut TuiState, ev: &crossterm::event::Event) {
     match ev {
         Event::Key(key_event) => {
             if key_event.kind == KeyEventKind::Press {
                 if key_event.code == KeyCode::Char('q') {
                     tui_state.request_quit();
+                }
+                if let Some(state) = context.get_resource_mut::<EditCommandTuiState>() {
+                
                 }
             }
         }

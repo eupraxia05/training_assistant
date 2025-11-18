@@ -68,9 +68,10 @@ fn process_invoice_generate_command(
 }
 
 fn process_invoice_command(
+    context: &mut Context,
     arg_matches: &ArgMatches,
-    db_connection: &mut DbConnection,
 ) -> Result<CommandResponse> {
+    let db_connection = context.db_connection().unwrap();
     if let Some(("generate", sub_m)) =
         arg_matches.subcommand()
     {

@@ -35,7 +35,7 @@ fn main() -> Result<()> {
                 println!("{}", text);
             }
             if r.tui_requested() {
-                tui_session(r.tui_render_fn().unwrap(), r.tui_update_fn().unwrap()).expect("failed to run tui session");
+                tui_session(&mut context, r.tui_render_fn().unwrap(), r.tui_update_fn().unwrap()).expect("failed to run tui session");
             }
         },
         Err(e) => {
@@ -46,16 +46,16 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-fn tui_session(render_fn: TuiRenderFn, update_fn: TuiUpdateFn) -> std::result::Result<(), ()> {
+fn tui_session(context: &mut Context, render_fn: TuiRenderFn, update_fn: TuiUpdateFn) -> std::result::Result<(), ()> {
     color_eyre::install().map_err(|_| ())?;
 
     let mut terminal = ratatui::init();
     let mut tui_state = TuiState::default();
     let result = {
         loop {
-            terminal.draw(render_fn).map_err(|_| ())?;
+            terminal.draw(|f| (render_fn)(context, f)).map_err(|_| ())?;
             let ev = crossterm::event::read().map_err(|_| ())?; 
-            (update_fn)(&mut tui_state, &ev);
+            (update_fn)(context, &mut tui_state, &ev);
             if tui_state.should_quit() { 
                 break Ok(());
             }
