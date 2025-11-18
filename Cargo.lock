@@ -494,6 +494,7 @@ dependencies = [
  "latex",
  "rusqlite",
  "tabled",
+ "training",
 ]
 
 [[package]]
@@ -3386,6 +3387,7 @@ dependencies = [
  "framework",
  "ratatui",
  "shlex",
+ "training",
 ]
 
 [[package]]
@@ -3606,6 +3608,16 @@ dependencies = [
  "sharded-slab",
  "thread_local",
  "tracing-core",
+]
+
+[[package]]
+name = "training"
+version = "0.1.0"
+dependencies = [
+ "framework",
+ "framework_derive_macros",
+ "rusqlite",
+ "tabled",
 ]
 
 [[package]]

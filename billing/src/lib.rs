@@ -8,6 +8,7 @@ use latex::{
     Document, DocumentClass, Element, PreambleElement,
 };
 use std::path::PathBuf;
+use training::{Client, Trainer};
 
 /// A `Plugin` that sets up the required commands and
 /// tables for billing.

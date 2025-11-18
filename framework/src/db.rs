@@ -279,20 +279,6 @@ pub trait TableRow: Sized + std::fmt::Debug {
     fn push_tabled_record(builder: &mut TabledBuilder, db_connection: &DbConnection, table_name: String, row_id: RowId);
 }
 
-/// Contains data about a single training client.
-#[derive(TableRow, Debug)]
-pub struct Client {
-    // The client's name.
-    name: String,
-}
-
-impl Client {
-    /// Gets a client's name.
-    pub fn name(&self) -> &String {
-        &self.name
-    }
-}
-
 /// A trait for types stored in a SQL database. Useful
 /// for translating data from SQL to Rust.
 pub trait TableField {
@@ -313,44 +299,6 @@ pub trait TableField {
     ) -> Result<Self>
     where
         Self: Sized;
-}
-
-
-/// Stores information about a trainer. Useful for holding company details.
-#[derive(TableRow, Debug)]
-pub struct Trainer {
-    name: String,
-    company_name: String,
-    address: String,
-    email: String,
-    phone: String,
-}
-
-impl Trainer {
-    /// Gets the trainer's name.
-    pub fn name(&self) -> &String {
-        &self.name
-    }
-
-    /// Gets the trainer's company name.
-    pub fn company_name(&self) -> &String {
-        &self.company_name
-    }
-
-    /// Gets the trainer's address.
-    pub fn address(&self) -> &String {
-        &self.address
-    }
-
-    /// Gets the trainer's email address.
-    pub fn email(&self) -> &String {
-        &self.email
-    }
-
-    /// Gets the trainer's phone number.
-    pub fn phone(&self) -> &String {
-        &self.phone
-    }
 }
 
 /// A configuration for a SQL table. Used when opening a
@@ -402,8 +350,6 @@ impl Plugin for DbPlugin {
 }
 
 fn add_db_commands(context: &mut Context) {
-    context.add_table::<Trainer>("trainer")
-        .add_table::<Client>("client");
     context
         .add_command(Command::new("db")
             .about("View and update database configuration")
@@ -1000,39 +946,6 @@ mod test {
         // delete the db. this one is in memory, so it
         // should just close the connection
         db_connection.delete_db()?;
-
-        Ok(())
-    }
-
-    #[test]
-    fn db_commands_test() -> Result<()> {
-        let mut context = Context::new();
-        context.add_plugin(DbPlugin);
-        context.in_memory_db(true);
-
-        context.startup()?;
-
-        let info_response = context.execute("db info")?;
-        assert!(info_response.text().is_some());
-        assert!(info_response.text().unwrap() == "Database connection open.\nNo database path (in-memory connection)");
-
-        assert_eq!(context.db_connection()?.get_table_row_ids("trainer")?, vec![]);
-        let new_response = context.execute("new --table=trainer")?;
-        assert!(new_response.text().is_some());
-        assert_eq!(new_response.text().unwrap(), "Inserted new row (id: 1) in table trainer.");
-        assert_eq!(context.db_connection()?.get_table_row_ids("trainer")?, vec![1]); 
-
-        let list_response = context.execute("list --table=trainer")?;
-        println!("{}", list_response.text().unwrap());
-        assert_eq!(list_response.text().unwrap(), 
-            "+----+------+--------------+---------+-------+-------+\n\
-            | ID | name | company_name | address | email | phone |\n\
-            +----+------+--------------+---------+-------+-------+\n\
-            | 1  | Err  |              |         |       |       |\n\
-            +----+------+--------------+---------+-------+-------+"
-        );
-        context.execute("db erase")?;
-        assert!(!context.db_connection()?.is_open());
 
         Ok(())
     }

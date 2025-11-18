@@ -27,8 +27,8 @@ use std::any::{Any, TypeId};
 /// }
 ///
 /// fn process_foo_command(
+///     _: &mut Context,
 ///     _: &ArgMatches,
-///     _: &mut DbConnection
 ///     ) -> Result<CommandResponse>
 /// {
 ///     Ok(CommandResponse::new("foo command invoked"))
@@ -209,7 +209,7 @@ impl Context {
     /// # context.add_plugin(DbPlugin);
     /// # context.in_memory_db(true);
     /// # context.startup()?;
-    /// context.execute("new --table trainer")?;
+    /// let response = context.execute("db info")?;
     /// # Ok(())
     /// # }
     /// ```

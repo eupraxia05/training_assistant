@@ -1,13 +1,15 @@
 //! The command-line interface for Training Assistant.
-
-use billing::InvoicePlugin;
 use framework::prelude::*;
 
 fn main() -> Result<()> {
     let mut context = Context::new();
-    context
-        .add_plugin(DbPlugin)
-        .add_plugin(InvoicePlugin);
+    context.add_plugin(DbPlugin);
+
+    #[cfg(feature="billing")]
+    context.add_plugin(billing::InvoicePlugin);
+
+    #[cfg(feature="training")]
+    context.add_plugin(training::TrainingPlugin);
 
     context.startup()?;
 

@@ -48,9 +48,8 @@ pub mod prelude {
         Error, Result,
         context::{CommandResponse, Context, Plugin, TuiRenderFn, TuiUpdateFn, TuiState, Resource},
         db::{
-            Client, DbConnection, DbPlugin,
+            DbConnection, DbPlugin,
             TableField, RowId, TableConfig, TableRow,
-            Trainer,
         },
     };
 }
