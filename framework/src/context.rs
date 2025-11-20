@@ -278,9 +278,6 @@ impl Default for Context {
 #[derive(Default)]
 pub struct CommandResponse {
     text: Option<String>,
-    tui_requested: bool,
-    tui_render_fn: Option<TuiRenderFn>,
-    tui_update_fn: Option<TuiUpdateFn>
 }
 
 #[derive(Default)]
@@ -309,29 +306,7 @@ impl CommandResponse {
     pub fn new(text: impl Into<String>) -> Self {
         Self {
             text: Some(text.into()),
-            tui_requested: false,
-            tui_render_fn: None,
-            tui_update_fn: None
         }
-    }
-
-    pub fn request_tui(mut self, tui_render_fn: TuiRenderFn, tui_update_fn: TuiUpdateFn) -> Self {
-        self.tui_requested = true;
-        self.tui_render_fn = Some(tui_render_fn);
-        self.tui_update_fn = Some(tui_update_fn);
-        self
-    }
-
-    pub fn tui_requested(&self) -> bool {
-        self.tui_requested
-    }
-    
-    pub fn tui_render_fn(&self) -> Option<TuiRenderFn> {
-        self.tui_render_fn
-    }
-
-    pub fn tui_update_fn(&self) -> Option<TuiUpdateFn> {
-        self.tui_update_fn
     }
 
     /// Gets a copy of the text of the response, if it exists.

@@ -12,9 +12,9 @@ use std::path::PathBuf;
 use std::fmt::{Display, Formatter};
 use tabled::{builder::Builder as TabledBuilder};
 use ratatui::{
-    style::Stylize,
+    style::{Style, Stylize, Color},
     text::Line,
-    widgets::{Block, Paragraph}
+    widgets::{Block, Paragraph, BorderType}
 };
 use crossterm::event::{Event, KeyEvent, KeyCode, KeyEventKind};
 use std::any::Any;
@@ -449,17 +449,6 @@ fn add_db_commands(context: &mut Context) {
                         .help("Value to set the field to")
                 ),
             process_set_command
-        )
-        .add_command(
-            Command::new("edit")
-                .about("Edits a table row in TUI mode.")
-                .arg(
-                    Arg::new("table")
-                        .long("table")
-                        .required(true)
-                        .help("Name of the table to edit")
-                ),
-            process_edit_command
         );
 }
 
@@ -619,22 +608,12 @@ impl Resource for EditCommandTuiState {
     fn as_any_mut(&mut self) -> &mut dyn Any { self }
 }
 
-fn process_edit_command(
-    context: &mut Context,
-    arg_matches: &ArgMatches, 
-) -> Result<CommandResponse> {
-    if let Some(state) = context.get_resource_mut::<EditCommandTuiState>() {
-        state.table = arg_matches.get_one::<String>("table").unwrap().into();
-    }
-    Ok(CommandResponse::new("Starting TUI session...").request_tui(render_edit_tui, update_edit_tui))
-}
-
-fn render_edit_tui(context: &mut Context, frame: &mut ratatui::Frame) {
+/*fn render_edit_tui(context: &mut Context, frame: &mut ratatui::Frame) {
     let table = if let Some(state) = context.get_resource_mut::<EditCommandTuiState>() {
         Some(state.table.clone())
     } else { None };
 
-    let title = format!("Editing table: {}", table.clone().unwrap_or("<err>".into()));
+    let title = format!(" ✏️ Editing table: {} ", table.clone().unwrap_or("<err>".into()));
 
     let db_connection = context.db_connection().unwrap();
 
@@ -646,8 +625,12 @@ fn render_edit_tui(context: &mut Context, frame: &mut ratatui::Frame) {
         .centered()
         .block(
             Block::bordered()
+                .border_type(BorderType::Double)
+                .border_style(Style::default().fg(Color::Indexed(088)))
+                .style(Style::default().bg(Color::Indexed(233)))
+                .title_style(Style::default().fg(Color::Indexed(251)).bg(Color::Indexed(088)))
                 .title(Line::from(title.bold()).centered())
-                .title_bottom(Line::from("Exit <Q> Up <A> Down <Z>".bold()).centered())
+                .title_bottom(Line::from(" Exit <Q> ".bold()).centered())
         );
         
     frame.render_widget(paragraph, frame.area());
@@ -667,7 +650,7 @@ fn update_edit_tui(context: &mut Context, tui_state: &mut TuiState, ev: &crosste
         }
         _ => { }
     }
-}
+}*/
 
 impl DbConnection {
     // opens a db connection at the default db path
