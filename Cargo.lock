@@ -488,6 +488,7 @@ name = "billing"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "directories",
  "documents",
  "framework",
  "framework_derive_macros",

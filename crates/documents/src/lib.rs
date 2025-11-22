@@ -33,7 +33,7 @@ pub fn write_document(
     println!("rendering latex document...");
     let rendered = latex::print(doc)
         .map_err(|e| e.to_string())?;
-
+    
     println!(
         "writing latex document to {:?}...",
         tex_path

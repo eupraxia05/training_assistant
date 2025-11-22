@@ -15,6 +15,47 @@ use training::{Client, Trainer};
 #[derive(Default, Clone)]
 pub struct InvoicePlugin;
 
+/// A table row storing a single issued invoice. Stored in the table
+/// `invoice`.
+#[derive(TableRow, Debug)]
+pub struct Invoice {
+    /// The row ID in the `client` table representing the client paying the invoice.
+    pub client: RowId,
+
+    /// The row ID in the `trainer` table representing the trainer issuing the invoice.
+    pub trainer: RowId,
+
+    /// An invoice number, in any desired format.
+    pub invoice_number: String,
+
+    /// The due date of the invoice.
+    pub due_date: String,
+
+    /// The date the invoice was paid.
+    pub date_paid: String,
+
+    /// The method by which the invoice was paid (cash, payment processor, etc)
+    pub paid_via: String,
+
+    /// The list of charges this invoice covers.
+    pub charges: Vec<RowId>,
+}
+
+/// A table row storing a single issued charge. Stored in the table
+/// `charge`.
+#[derive(TableRow, Debug)]
+pub struct Charge {
+    /// The date the charge was issued.
+    pub date: String,
+
+    /// A description of the charge (e.g. `"Personal training session (60 min)"`)
+    pub description: String,
+
+    /// The amount charged, in dollars.
+    // TODO: allow for other non-Murican currencies
+    pub amount: i32,
+}
+
 impl Plugin for InvoicePlugin {
     fn build(self, context: &mut Context) {
         // set up charge and invoice tables
@@ -96,11 +137,24 @@ impl From<NewCommand> for PreambleElement {
     }
 }
 
-pub fn create_invoice(
+fn create_invoice(
     db_connection: &mut DbConnection,
     out_path: PathBuf,
     invoice_row_id: RowId,
 ) -> Result<()> {
+    let doc = generate_latex(db_connection, invoice_row_id)?;
+
+    write_document(
+        out_path.as_path(),
+        "invoice",
+        &doc,
+    )
+    .expect("failed to write document");
+
+    Ok(())
+}
+
+fn generate_latex(db_connection: &mut DbConnection, invoice_row_id: RowId) -> Result<Document> {
     let invoice = Invoice::from_table_row(
         db_connection,
         "invoice".into(),
@@ -182,30 +236,119 @@ pub fn create_invoice(
         include_str!("invoice_template.tex").into(),
     ));
 
-    write_document(
-        out_path.as_path(),
-        "invoice",
-        &doc,
-    )
-    .expect("failed to write document");
-
-    Ok(())
+    Ok(doc)
 }
 
-#[derive(TableRow, Debug)]
-pub struct Invoice {
-    pub client: RowId,
-    pub trainer: RowId,
-    pub invoice_number: String,
-    pub due_date: String,
-    pub date_paid: String,
-    pub paid_via: String,
-    pub charges: Vec<RowId>,
-}
+#[cfg(test)]
+mod test {
+    use framework::prelude::*;
+    use crate::{InvoicePlugin, Invoice, Charge};
+    use training::{TrainingPlugin, Trainer, Client};
 
-#[derive(TableRow, Debug)]
-pub struct Charge {
-    pub date: String,
-    pub description: String,
-    pub amount: i32,
+    #[test]
+    fn invoice_generate_test() -> Result<()> {
+        let mut context = Context::new();
+        context.add_plugin(DbPlugin)
+           .add_plugin(InvoicePlugin)
+           .add_plugin(TrainingPlugin);
+
+        context.startup()?;
+
+        let db_connection = context.db_connection()?;
+       
+        // TODO: setting each field like this is super verbose and not typesafe, this should be
+        // wrapped
+        let client = db_connection.new_row_in_table("client")?;
+        db_connection.set_field_in_table("client", client, "name", "Clarissa Client")?;
+
+        let trainer = db_connection.new_row_in_table("trainer")?;
+        db_connection.set_field_in_table("trainer", trainer, "name", "Tara Trainer")?;
+        db_connection.set_field_in_table("trainer", trainer, "company_name", "Tara Fitness")?;
+        db_connection.set_field_in_table("trainer", trainer, "address", "2127 Xanthia St, Denver, CO 80220")?;
+        db_connection.set_field_in_table("trainer", trainer, "email", "tara@gmail.com")?;
+        db_connection.set_field_in_table("trainer", trainer, "phone", "(303) 175-3098")?;
+
+        let charge = db_connection.new_row_in_table("charge")?;
+        db_connection.set_field_in_table("charge", charge, "date", "11/05/2025")?;
+        db_connection.set_field_in_table("charge", charge, "description", "Personal training session (60 min)")?;
+        db_connection.set_field_in_table("charge", charge, "amount", "50")?;
+
+        let invoice = db_connection.new_row_in_table("invoice")?;
+        // TODO: I don't like passing client.0 here, RowId should implement ToSql
+        db_connection.set_field_in_table("invoice", invoice, "client", client.0)?;
+        db_connection.set_field_in_table("invoice", invoice, "trainer", trainer.0)?;
+        db_connection.set_field_in_table("invoice", invoice, "invoice_number", "2025-0532")?;
+        db_connection.set_field_in_table("invoice", invoice, "due_date", "11/06/2025")?;
+        db_connection.set_field_in_table("invoice", invoice, "date_paid", "11/07/2025")?;
+        db_connection.set_field_in_table("invoice", invoice, "paid_via", "Cash")?;
+        // TODO: same here, Vec<RowId> should implement ToSql
+        db_connection.set_field_in_table("invoice", invoice, "charges", format!("{}", charge.0))?;
+
+        let latex = crate::generate_latex(db_connection, invoice)?;
+
+        let rendered = latex::print(&latex).unwrap();
+
+        assert_eq!(rendered, "\\documentclass{article}\n\
+            \\usepackage{hhline}\n\
+            \\usepackage[margin=0.5in]{geometry}\n\
+            \\newcommand{\\companyname}{Tara Fitness}\n\
+            \\newcommand{\\companyaddress}{2127 Xanthia St, Denver, CO 80220}\n\
+            \\newcommand{\\companyemail}{tara@gmail.com}\n\
+            \\newcommand{\\companyphone}{(303) 175-3098}\n\
+            \\newcommand{\\clientname}{Clarissa Client}\n\
+            \\newcommand{\\invoicenumber}{2025-0532}\n\
+            \\newcommand{\\paymentdue}{11/06/2025}\n\
+            \\newcommand{\\paymentmade}{11/07/2025}\n\
+            \\newcommand{\\paidvia}{Cash}\n\
+            \\newcommand{\\chargedate}{11/05/2025}\n\
+            \\newcommand{\\chargedescription}{Personal training session (60 min)}\n\
+            \\newcommand{\\chargeamount}{50}\n\
+            \\begin{document}\n\
+            \\begin{center}\n\
+            \t{\\Large\\bfseries \\companyname}\\\\\n\
+            \t{\\companyaddress}\\\\\n\
+            \tEmail: \\companyemail \\hspace{1cm} Phone \\companyphone\n\
+            \\end{center}\n\n\
+            \\vspace{0.5cm}\n\
+            \\hrule\n\\vspace{0.5cm}\n\n\
+            \\noindent{\\textbf{Invoice Number:} \\invoicenumber} \\\\\n\
+            \\noindent{\\textbf{Client Name:} \\clientname} \\\\\n\
+            \\noindent{\\textbf{Payment Due:} \\paymentdue} \\\\\n\
+            \\noindent{\\textbf{Payment Made:} \\paymentmade} \\\\\n\
+            \\noindent{\\textbf{Paid Via:} \\paidvia} \\\\\n\n\
+            \\vspace{0.5cm}\n\
+            \\begin{center}\n\
+            \\begin{tabular}{|p{2.0cm}|p{8.0cm}|p{2.5cm}|}\n\
+            \t\\hline\n\
+            \t\\textbf{Date} & \\textbf{Description} & \\textbf{Amount (\\$)} \\\\\n\
+            \t\\hline\n\
+            \t\\chargedate & \\chargedescription & \\chargeamount \\\\\n\
+            \t\\hhline{|=|=|=|}\n\
+            \t\\multicolumn{2}{|l|}{\\textbf{Total}} & \\textbf{100} \\\\\n\
+            \t\\hline\n\
+            \\end{tabular}\n\
+            \\end{center}\n\n\
+            \\vspace{0.5cm}\n\n\
+            \\noindent{\\textit{Payment due at time of service. Refunds only \
+            available for sessions cancelled at least 24 hours in advance.}\n\n\
+            \\vspace{0.5cm}\n\n\
+            \\noindent{\\textit{Thanks for training with me!}}\n\n\
+            \\end{document}\n"
+        );
+
+        let out_path = std::env::temp_dir().join("training_assistant_test");
+       
+        std::fs::create_dir_all(out_path.clone())?;
+
+        documents::write_document(
+            out_path.as_path(),
+            "invoice",
+            &latex,
+        )
+        .expect("failed to write document");
+
+        std::fs::remove_dir_all(out_path)?;
+        
+        Ok(())
+    }
 }
