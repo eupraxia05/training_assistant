@@ -12,14 +12,15 @@ ratatui = "0.29.0"
 crossterm = "0.29.0"
 color-eyre = "0.6.5"
 training = { version = "0.1.0", path = "../training", optional = true }
-tui = { version = "0.1.0", path = "../tui" }
+tui = { version = "0.1.0", path = "../tui", optional = true }
 db_commands = { path = "../db_commands", optional = true}
 
 [lints]
 workspace = true
 
 [features]
-default = ["billing", "training", "db_commands"]
+default = ["billing", "training", "db_commands", "tui"]
 billing = ["dep:billing"]
 training = ["dep:training"]
 db_commands = ["dep:db_commands"]
+tui = ["dep:tui"]

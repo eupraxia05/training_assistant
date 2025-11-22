@@ -6,6 +6,7 @@ edition = "2024"
 [dependencies]
 clap = "4.5.53"
 framework = { path = "../framework" }
+ratatui = "0.29.0"
 tui = { path = "../tui" }
 
 [lints]

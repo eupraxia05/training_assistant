@@ -209,7 +209,7 @@ impl Context {
     /// # context.add_plugin(DbPlugin);
     /// # context.in_memory_db(true);
     /// # context.startup()?;
-    /// let response = context.execute("db info")?;
+    /// let response = context.execute("help")?;
     /// # Ok(())
     /// # }
     /// ```

@@ -6,6 +6,9 @@ fn main() -> Result<()> {
     let mut context = Context::new();
     context.add_plugin(DbPlugin);
 
+    #[cfg(feature="tui")]
+    context.add_plugin(tui::TuiPlugin);
+
     #[cfg(feature="billing")]
     context.add_plugin(billing::InvoicePlugin);
 

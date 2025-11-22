@@ -351,36 +351,6 @@ impl Plugin for DbPlugin {
 
 fn add_db_commands(context: &mut Context) {
     context
-        .add_command(Command::new("db")
-            .about("View and update database configuration")
-            .subcommand(Command::new("info")
-                .about("Prints information about the database")
-            )
-            .subcommand(Command::new("erase")
-                .about("Erases the database")
-            )
-            .subcommand(
-                Command::new("backup")
-                    .about("Copies the database to a new file")
-                    .arg(
-                        Arg::new("out-file")
-                            .long("out-file")
-                            .required(true)
-                            .help("File path to copy the database to (will be overwritten)")
-                    )
-            )
-            .subcommand(
-                Command::new("restore")
-                    .about("Restores the database from a given file")
-                    .arg(
-                        Arg::new("file")
-                            .long("file")
-                            .required(true)
-                            .help("File path to restore the database from")
-                    )
-            )
-            .subcommand_required(true),
-            process_db_command)
         .add_command(Command::new("new")
             .about("Add a new row to a table")
             .arg(
@@ -450,36 +420,6 @@ fn add_db_commands(context: &mut Context) {
                 ),
             process_set_command
         );
-}
-
-fn erase_db(
-    db_connection: &mut DbConnection,
-) -> Result<CommandResponse> {
-    db_connection.delete_db()?;
-    Ok(CommandResponse::default())
-}
-
-fn process_db_command(
-    context: &mut Context,
-    matches: &ArgMatches,
-) -> Result<CommandResponse> {
-    match matches.subcommand() {
-        Some(("info", _)) => {
-            let db_connection = context.db_connection().unwrap();
-            process_db_info_command(db_connection)
-        }
-        Some(("erase", _)) => {
-            let db_connection = context.db_connection().unwrap();
-            erase_db(db_connection)
-        }
-        Some(("backup", _)) => {
-            Ok(CommandResponse::default())
-        }
-        Some(("restore", _)) => {
-            Ok(CommandResponse::default())
-        }
-        _ => Ok(CommandResponse::default()),
-    }
 }
 
 fn process_new_command(
@@ -580,22 +520,6 @@ fn process_remove_command(
         .expect("Couldn't remove row from table");
 
     Ok(CommandResponse::default())
-}
-
-fn process_db_info_command(db_connection: &mut DbConnection) -> Result<CommandResponse> {
-    let mut response_text = String::default();
-    if db_connection.is_open() {
-        response_text += "Database connection open.\n";
-        if let Some(db_path) = db_connection.db_path() {
-            response_text += format!("Database path: {:?}", db_path).as_str();
-        } else {
-            response_text += "No database path (in-memory connection)";
-        }
-    } else {
-        response_text += "No database connection open.";
-    }
-
-    Ok(CommandResponse::new(response_text))
 }
 
 #[derive(Default)]

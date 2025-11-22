@@ -982,6 +982,7 @@ version = "0.1.0"
 dependencies = [
  "clap",
  "framework",
+ "ratatui",
  "tui",
 ]
 
@@ -3641,6 +3642,7 @@ checksum = "d2df906b07856748fa3f6e0ad0cbaa047052d4a7dd609e231c4f72cee8c36f31"
 name = "tui"
 version = "0.1.0"
 dependencies = [
+ "clap",
  "crossterm 0.29.0",
  "framework",
  "ratatui",
