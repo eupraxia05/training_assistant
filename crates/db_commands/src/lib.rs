@@ -114,7 +114,9 @@ fn process_edit_command(
     context: &mut Context, 
     matches: &ArgMatches
 ) -> Result<CommandResponse> {
-    context.add_resource(Tui::default().with_tabs([Tab::new::<EditTabImpl>("tab 1"), Tab::new::<EditTabImpl>("tab 2")]));
+    context.add_resource(Tui::default().with_tabs(
+        [Tab::new::<EditTabImpl>("tab 1"), Tab::new::<EditTabImpl>("tab 2")])
+    );
     Ok(CommandResponse::new("Starting TUI session..."))
 }
 

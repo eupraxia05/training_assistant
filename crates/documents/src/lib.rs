@@ -2,7 +2,7 @@ use directories::ProjectDirs;
 use latex::Document;
 use std::io::Write;
 use std::path::Path;
-use std::process::Command;
+use std::process::{Command, Stdio};
 
 pub fn write_document(
     out_folder: &Path,
@@ -42,6 +42,8 @@ pub fn write_document(
         .map_err(|e| e.to_string())?;
 
     let mut cmd = Command::new("pdflatex");
+        cmd.stdout(Stdio::null())
+        .stderr(Stdio::null());
     cmd.arg(format!(
         "-output-directory={}",
         temp_dir.display()
@@ -53,7 +55,8 @@ pub fn write_document(
     let cmd_output =
         cmd.output().map_err(|e| e.to_string())?;
 
-    println!("piping command output...");
+    // TODO: make an argument to enable this
+    /*println!("piping command output...");
 
     std::io::stdout()
         .write(&cmd_output.stdout)
@@ -66,7 +69,7 @@ pub fn write_document(
         .map_err(|e| e.to_string())?;
     std::io::stderr()
         .flush()
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| e.to_string())?;*/
 
     println!(
         "copying generated pdf at {:?} to {:?}",
