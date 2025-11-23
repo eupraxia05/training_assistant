@@ -5,7 +5,7 @@ use ratatui::layout::{Rect, Layout, Constraint};
 use crossterm::event::{Event, KeyEventKind, KeyEvent, KeyCode};
 use ratatui::style::{Stylize, Style, Color};
 use ratatui::text::{Line, Text, Span};
-use ratatui::widgets::{Block, Paragraph, Borders, Tabs, Widget, List};
+use ratatui::widgets::{Block, Paragraph, StatefulWidget, HighlightSpacing, Borders, Tabs, Widget, List, ListState};
 use ratatui::buffer::Buffer;
 use ratatui::Frame;
 use clap::{ArgMatches, Command};
@@ -16,6 +16,7 @@ pub struct TuiPlugin;
 impl Plugin for TuiPlugin {
     fn build(self, context: &mut Context) {
         context.add_resource(TuiNewTabTypes::default());
+        context.add_resource(EmptyTabState::default());
         context.add_command(
             Command::new("tui")
                 .about("Opens an empty TUI session."),
@@ -128,14 +129,21 @@ impl Tab {
 pub trait TabImpl {
     fn title() -> String;
     fn render(context: &mut Context, buffer: &mut Buffer, area: Rect, block: Block);
+    fn keybinds() -> Vec<KeyBind>;
+    fn handle_key(context: &mut Context, bind_name: &str, tab_idx: usize);
 }
 
 type TabTitleFn = fn () -> String;
 type TabRenderFn = fn (&mut Context, &mut Buffer, Rect, Block);
+type TabKeybindsFn = fn () -> Vec<KeyBind>;
+type TabHandleKeyFn = fn(&mut Context, &str, usize);
 
+#[derive(Clone)]
 struct TabFuncs {
    title_fn: TabTitleFn,
-   render_fn: TabRenderFn
+   render_fn: TabRenderFn,
+   keybinds_fn: TabKeybindsFn,
+   handle_key_fn: TabHandleKeyFn,
 }
 
 impl TabFuncs {
@@ -145,13 +153,18 @@ impl TabFuncs {
         Self {
             title_fn: T::title,
             render_fn: T::render,
+            keybinds_fn: T::keybinds,
+            handle_key_fn: T::handle_key,
         }
     }
 }
 
+#[derive(Clone)]
 pub struct KeyBind {
+    name: String,
     display_key: String,
     display_name: String,
+    key_code: KeyCode
 }
 
 impl KeyBind {
@@ -167,29 +180,45 @@ impl KeyBind {
 pub fn run_tui(context: &mut Context) -> std::result::Result<(), ()> { 
     let mut terminal = ratatui::init();
     let result = loop {
-        
         let global_keybinds = vec!(
             KeyBind {
+                name: "quit".into(),
                 display_key: "Q".into(),
-                display_name: "Quit".into()
+                display_name: "Quit".into(),
+                key_code: KeyCode::Char('q')
             },
             KeyBind {
+                name: "prev_tab".into(),
                 display_key: "Ctrl+Left".into(),
                 display_name: "Prev Tab".into(),
+                key_code: KeyCode::Left,
             },
             KeyBind {
+                name: "next_tab".into(),
                 display_key: "Ctrl+Right".into(),
                 display_name: "Next Tab".into(),
+                key_code: KeyCode::Right,
             },
             KeyBind {
+                name: "new_tab".into(),
                 display_key: "Ctrl+T".into(),
                 display_name: "New Tab".into(),
+                key_code: KeyCode::Char('t'), 
             }
         );
+ 
+        let selected_tab = context.get_resource_mut::<Tui>().unwrap().selected_tab;
+        let tab_funcs = if let Some(funcs) = &context.get_resource_mut::<Tui>().unwrap().tabs[selected_tab].funcs {
+            funcs
+        } else {
+            &TabFuncs::new::<EmptyTabImpl>()
+        };
 
-        terminal.draw(|f| render_tui(context, f, &global_keybinds)).map_err(|_| ())?;
+        let tab_keybinds = (tab_funcs.keybinds_fn)();
+
+        terminal.draw(|f| render_tui(context, f, &global_keybinds, &tab_keybinds)).map_err(|_| ())?;
         let ev = crossterm::event::read().map_err(|_| ())?;
-        handle_event(context, ev);
+        handle_event(context, ev, &global_keybinds, &tab_keybinds);
         if context.get_resource_mut::<Tui>().unwrap().should_quit() {
             break Ok(());
         }
@@ -198,10 +227,15 @@ pub fn run_tui(context: &mut Context) -> std::result::Result<(), ()> {
     result
 }
 
-fn render_tui(context: &mut Context, frame: &mut ratatui::Frame, keybinds: &Vec<KeyBind>) {
+fn render_tui(context: &mut Context, frame: &mut ratatui::Frame, keybinds: &Vec<KeyBind>, tab_keybinds: &Vec<KeyBind>) {
+    // TODO: there has to be a better way to do this
+    let mut tab_keybinds_copy = tab_keybinds.clone();
+    let mut combined_keybinds = keybinds.clone();
+    combined_keybinds.append(&mut tab_keybinds_copy);
+
     let mut keybind_lines = vec!(Vec::new());
     let mut width_so_far = 0;
-    for keybind in keybinds {
+    for keybind in &combined_keybinds {
        let text = keybind.display_text();
        if width_so_far + text.width() + 1 < frame.area().width as usize {
            width_so_far += text.width() + 1;
@@ -243,22 +277,42 @@ fn render_tabs(context: &mut Context, frame: &mut ratatui::Frame) {
         .render(frame.area(), frame.buffer_mut());
 }
 
-fn handle_event(context: &mut Context, ev: crossterm::event::Event) {
-    match ev {
+fn event_to_key_bind(ev: crossterm::event::Event, keybinds: &Vec<KeyBind>) -> Option<&KeyBind> {
+    let key_code = match ev {
         Event::Key(key_event) => {
             if key_event.kind == KeyEventKind::Press {
-                if key_event.code == KeyCode::Char('q') {
-                    context.get_resource_mut::<Tui>().unwrap().request_quit();
-                }
-                if key_event.code == KeyCode::Left {
-                    context.get_resource_mut::<Tui>().unwrap().cycle_tab_prev();
-                }
-                if key_event.code == KeyCode::Right {
-                    context.get_resource_mut::<Tui>().unwrap().cycle_tab_next();
-                }
+                key_event.code
+            } else {
+                return None;
             }
+        },
+        _ => { return None; }
+    };
+
+    keybinds.iter().find(|k| key_code == k.key_code)
+}
+
+fn handle_event(context: &mut Context, ev: crossterm::event::Event, global_keybinds: &Vec<KeyBind>, tab_keybinds: &Vec<KeyBind>) {
+    if let Some(bind) = event_to_key_bind(ev.clone(), global_keybinds) {
+        match bind.name.as_str() {
+            "quit" => {
+                context.get_resource_mut::<Tui>().unwrap().request_quit();
+            },
+            "prev_tab" => {
+                context.get_resource_mut::<Tui>().unwrap().cycle_tab_prev();
+            },
+            "next_tab" => {
+                context.get_resource_mut::<Tui>().unwrap().cycle_tab_next();
+            },
+            "new_tab" => {
+                //context.get_resource_mut::<Tui>().unwrap()
+            },
+            _ => { }
         }
-        _ => { }
+    } else if let Some(bind) = event_to_key_bind(ev.clone(), tab_keybinds) {
+        let selected_tab = context.get_resource_mut::<Tui>().unwrap().selected_tab;
+        let funcs = context.get_resource_mut::<Tui>().unwrap().tabs[selected_tab].funcs.clone().unwrap_or(TabFuncs::new::<EmptyTabImpl>()).clone();
+        (funcs.handle_key_fn)(context, bind.name.as_str(), selected_tab);
     }
 }
 
@@ -278,9 +332,79 @@ impl TabImpl for EmptyTabImpl {
         let tui_new_tab_types = context.get_resource_mut::<TuiNewTabTypes>().unwrap();
         let items = tui_new_tab_types.types.iter().map(|t| t.name.clone());
         if items.len() > 0 {
-            List::new(items).block(block).render(rect, buffer);
+            let list = List::new(items)
+                .block(block)
+                .highlight_style(Style::new().fg(Color::Black).bg(Color::White))
+                .highlight_symbol(">")
+                .highlight_spacing(HighlightSpacing::Always);
+            StatefulWidget::render(list, rect, buffer, &mut context.get_resource_mut::<EmptyTabState>().unwrap().list_state);
         } else {
             Paragraph::new("No creatable tab types.").block(block).render(rect, buffer);
         }
+    }
+
+    fn keybinds() -> Vec<KeyBind> {
+        vec![
+            KeyBind {
+                display_key: "Up".into(),
+                display_name: "Move Up".into(),
+                key_code: KeyCode::Up,
+                name: "move_up".into()
+            },
+            KeyBind {
+                display_key: "Down".into(),
+                display_name: "Move Down".into(),
+                key_code: KeyCode::Down,
+                name: "move_down".into()
+            },
+            KeyBind {
+                display_key: "Enter".into(),
+                display_name: "Select".into(),
+                key_code: KeyCode::Enter,
+                name: "select".into()
+            }
+        ]
+    }
+
+    fn handle_key(context: &mut Context, bind: &str, tab_idx: usize) {
+        match bind {
+            "move_up" => {
+                context.get_resource_mut::<EmptyTabState>().unwrap().list_state.select_previous();
+            },
+            "move_down" => {
+                context.get_resource_mut::<EmptyTabState>().unwrap().list_state.select_next();
+            },
+            "select" => {
+                let selected_new_tab = context.get_resource_mut::<EmptyTabState>().unwrap().list_state.selected().unwrap();
+                let tab_funcs = context.get_resource_mut::<TuiNewTabTypes>().unwrap().types[selected_new_tab].funcs.clone();
+                let selected_tab_idx = context.get_resource_mut::<Tui>().unwrap().selected_tab;
+                context.get_resource_mut::<Tui>().unwrap().tabs[selected_tab_idx].funcs = Some(tab_funcs); 
+            }
+            _ => { }
+        }
+    }
+}
+
+struct EmptyTabState {
+    list_state: ListState    
+}
+
+impl Default for EmptyTabState {
+    fn default() -> Self {
+        let mut list_state = ListState::default();
+        list_state.select(Some(0));
+        Self {
+            list_state
+        }
+    }
+}
+
+impl Resource for EmptyTabState {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
     }
 }

@@ -1,9 +1,9 @@
 //! A plugin that adds a set of commands for editing the database.
 use framework::prelude::*;
 use clap::{Command, Arg, ArgMatches};
-use tui::{Tui, Tab, TabImpl, TuiNewTabTypes};
+use tui::{Tui, KeyBind, Tab, TabImpl, TuiNewTabTypes};
 use ratatui::{
-    widgets::{Block, Paragraph, Widget},
+    widgets::{Wrap, Block, Paragraph, Widget},
     text::Line,
     style::Stylize,
     buffer::Buffer,
@@ -87,7 +87,7 @@ fn process_db_command(
     }
 }
 
-fn process_db_info_command(db_connection: &mut DbConnection) -> Result<CommandResponse> {
+fn db_info_text(db_connection: &mut DbConnection) -> String {
     let mut response_text = String::default();
     if db_connection.is_open() {
         response_text += "Database connection open.\n";
@@ -99,6 +99,11 @@ fn process_db_info_command(db_connection: &mut DbConnection) -> Result<CommandRe
     } else {
         response_text += "No database connection open.";
     }
+    response_text
+}
+
+fn process_db_info_command(db_connection: &mut DbConnection) -> Result<CommandResponse> {
+    let response_text = db_info_text(db_connection); 
 
     Ok(CommandResponse::new(response_text))
 }
@@ -130,7 +135,18 @@ impl TabImpl for DbInfoTabImpl {
     fn render(context: &mut Context, buffer: &mut Buffer,
         rect: Rect, block: Block
     ) {
-        Paragraph::new("db info tab content").block(block).render(rect, buffer);
+        let db_connection = context.db_connection().unwrap();
+        let text = db_info_text(db_connection);
+
+        Paragraph::new(text).block(block).wrap(Wrap { trim: true }).render(rect, buffer);
+    }
+
+    fn keybinds() -> Vec<KeyBind> {
+        Vec::new()
+    }
+
+    fn handle_key(context: &mut Context, bind_name: &str, tab_idx: usize) {
+
     }
 }
 
@@ -145,5 +161,13 @@ impl TabImpl for EditTabImpl {
         rect: Rect, block: Block
     ) {
         Paragraph::new("edit tab content").block(block).render(rect, buffer);     
+    }
+
+    fn keybinds() -> Vec<KeyBind> {
+        Vec::new()
+    }
+    
+    fn handle_key(context: &mut Context, bind_name: &str, tab_idx: usize) {
+
     }
 }
