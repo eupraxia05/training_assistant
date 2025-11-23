@@ -2,10 +2,10 @@
 use framework::prelude::*;
 use std::any::Any;
 use ratatui::layout::{Rect, Layout, Constraint};
-use crossterm::event::{Event, KeyEventKind, KeyEvent, KeyCode};
-use ratatui::style::{Stylize, Style, Color};
+use crossterm::event::{Event, KeyModifiers, KeyEventKind, KeyEvent, KeyCode};
+use ratatui::style::{Stylize, Style, Color, palette::tailwind};
 use ratatui::text::{Line, Text, Span};
-use ratatui::widgets::{Block, Paragraph, StatefulWidget, HighlightSpacing, Borders, Tabs, Widget, List, ListState};
+use ratatui::widgets::{Block, BorderType, Paragraph, StatefulWidget, HighlightSpacing, Borders, Tabs, Widget, List, ListState};
 use ratatui::buffer::Buffer;
 use ratatui::Frame;
 use clap::{ArgMatches, Command};
@@ -164,15 +164,30 @@ pub struct KeyBind {
     name: String,
     display_key: String,
     display_name: String,
-    key_code: KeyCode
+    key_code: KeyCode,
+    modifiers: KeyModifiers,
 }
 
 impl KeyBind {
-    fn display_text(&self) -> Line {
+    fn display_text(&self) -> Line<'_> {
         Line::from(vec![
            Span::styled(format!("<{}>", self.display_key), Style::default().fg(Color::Black).bg(Color::White)),
            Span::styled(format!(" {}", self.display_name), Style::default())
         ])
+    }
+}
+
+pub struct TuiStyle {
+    
+}
+
+impl Resource for TuiStyle {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
     }
 }
 
@@ -185,25 +200,29 @@ pub fn run_tui(context: &mut Context) -> std::result::Result<(), ()> {
                 name: "quit".into(),
                 display_key: "Q".into(),
                 display_name: "Quit".into(),
-                key_code: KeyCode::Char('q')
+                key_code: KeyCode::Char('q'),
+                modifiers: KeyModifiers::NONE
             },
             KeyBind {
                 name: "prev_tab".into(),
                 display_key: "Ctrl+Left".into(),
                 display_name: "Prev Tab".into(),
                 key_code: KeyCode::Left,
+                modifiers: KeyModifiers::CONTROL,
             },
             KeyBind {
                 name: "next_tab".into(),
                 display_key: "Ctrl+Right".into(),
                 display_name: "Next Tab".into(),
                 key_code: KeyCode::Right,
+                modifiers: KeyModifiers::CONTROL,
             },
             KeyBind {
                 name: "new_tab".into(),
                 display_key: "Ctrl+T".into(),
                 display_name: "New Tab".into(),
-                key_code: KeyCode::Char('t'), 
+                key_code: KeyCode::Char('t'),
+                modifiers: KeyModifiers::CONTROL,
             }
         );
  
@@ -246,6 +265,10 @@ fn render_tui(context: &mut Context, frame: &mut ratatui::Frame, keybinds: &Vec<
        }
     };
 
+    let frame_area = frame.area();
+
+    frame.buffer_mut().set_style(frame_area, Style::default().bg(tailwind::SLATE.c800).fg(tailwind::SLATE.c100));
+
     let vertical_layout = Layout::vertical([Constraint::Length(1), Constraint::Min(0), Constraint::Length(keybind_lines.len() as u16)]);
     let [header_area, content_area, footer_area] = vertical_layout.areas(frame.area());
     //frame.render_widget(Line::from("Training Assistant TUI").bold().centered(), header_area);
@@ -256,7 +279,8 @@ fn render_tui(context: &mut Context, frame: &mut ratatui::Frame, keybinds: &Vec<
     } else {
         &TabFuncs::new::<EmptyTabImpl>()
     };
-    (tab_funcs.render_fn)(context, frame.buffer_mut(), content_area, Block::new().borders(Borders::ALL));
+    (tab_funcs.render_fn)(context, frame.buffer_mut(), content_area, Block::new()
+        .border_type(BorderType::QuadrantOutside).borders(Borders::ALL).bg(tailwind::SLATE.c900));
 
     let keybind_vertical_layout_constraints = (0..keybind_lines.len()).map(|_| Constraint::Length(1));
     let keybind_vertical_layout = Layout::vertical(keybind_vertical_layout_constraints).split(footer_area);
@@ -273,15 +297,18 @@ fn render_tabs(context: &mut Context, frame: &mut ratatui::Frame) {
     let titles = context.get_resource_mut::<Tui>().unwrap().tabs.iter()
         .map(|t| t.title.clone());
     Tabs::new(titles)
+        .highlight_style(Style::new().bg(tailwind::RED.c700).fg(tailwind::RED.c100))
+        .padding(" ", "")
+        .divider(" ")
         .select(context.get_resource_mut::<Tui>().unwrap().selected_tab)
         .render(frame.area(), frame.buffer_mut());
 }
 
 fn event_to_key_bind(ev: crossterm::event::Event, keybinds: &Vec<KeyBind>) -> Option<&KeyBind> {
-    let key_code = match ev {
+    let (key_code, modifiers) = match ev {
         Event::Key(key_event) => {
             if key_event.kind == KeyEventKind::Press {
-                key_event.code
+                (key_event.code, key_event.modifiers)
             } else {
                 return None;
             }
@@ -289,7 +316,7 @@ fn event_to_key_bind(ev: crossterm::event::Event, keybinds: &Vec<KeyBind>) -> Op
         _ => { return None; }
     };
 
-    keybinds.iter().find(|k| key_code == k.key_code)
+    keybinds.iter().find(|k| key_code == k.key_code && modifiers == k.modifiers)
 }
 
 fn handle_event(context: &mut Context, ev: crossterm::event::Event, global_keybinds: &Vec<KeyBind>, tab_keybinds: &Vec<KeyBind>) {
@@ -305,7 +332,7 @@ fn handle_event(context: &mut Context, ev: crossterm::event::Event, global_keybi
                 context.get_resource_mut::<Tui>().unwrap().cycle_tab_next();
             },
             "new_tab" => {
-                //context.get_resource_mut::<Tui>().unwrap()
+                context.get_resource_mut::<Tui>().unwrap().tabs.push(Tab::new::<EmptyTabImpl>("New Tab"));
             },
             _ => { }
         }
@@ -349,19 +376,22 @@ impl TabImpl for EmptyTabImpl {
                 display_key: "Up".into(),
                 display_name: "Move Up".into(),
                 key_code: KeyCode::Up,
-                name: "move_up".into()
+                name: "move_up".into(),
+                modifiers: KeyModifiers::NONE,
             },
             KeyBind {
                 display_key: "Down".into(),
                 display_name: "Move Down".into(),
                 key_code: KeyCode::Down,
-                name: "move_down".into()
+                name: "move_down".into(),
+                modifiers: KeyModifiers::NONE,
             },
             KeyBind {
                 display_key: "Enter".into(),
                 display_name: "Select".into(),
                 key_code: KeyCode::Enter,
-                name: "select".into()
+                name: "select".into(),
+                modifiers: KeyModifiers::NONE,
             }
         ]
     }
