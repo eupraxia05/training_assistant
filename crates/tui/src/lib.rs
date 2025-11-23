@@ -223,6 +223,20 @@ pub fn run_tui(context: &mut Context) -> std::result::Result<(), ()> {
                 display_name: "New Tab".into(),
                 key_code: KeyCode::Char('t'),
                 modifiers: KeyModifiers::CONTROL,
+            },
+            KeyBind {
+                name: "close_tab".into(),
+                display_key: "Ctrl+E".into(),
+                display_name: "Close Tab".into(),
+                key_code: KeyCode::Char('e'),
+                modifiers: KeyModifiers::CONTROL,
+            },
+            KeyBind {
+                name: "clear_tab".into(),
+                display_key: "Ctrl+R".into(),
+                display_name: "Clear Tab".into(),
+                key_code: KeyCode::Char('r'),
+                modifiers: KeyModifiers::CONTROL,
             }
         );
  
@@ -334,6 +348,14 @@ fn handle_event(context: &mut Context, ev: crossterm::event::Event, global_keybi
             "new_tab" => {
                 context.get_resource_mut::<Tui>().unwrap().tabs.push(Tab::new::<EmptyTabImpl>("New Tab"));
             },
+            "close_tab" => {
+                let selected_tab = context.get_resource_mut::<Tui>().unwrap().selected_tab;
+                context.get_resource_mut::<Tui>().unwrap().tabs.remove(selected_tab);
+            },
+            "clear_tab" => {
+                let selected_tab = context.get_resource_mut::<Tui>().unwrap().selected_tab;
+                context.get_resource_mut::<Tui>().unwrap().tabs[selected_tab].funcs = Some(TabFuncs::new::<EmptyTabImpl>()); 
+            }
             _ => { }
         }
     } else if let Some(bind) = event_to_key_bind(ev.clone(), tab_keybinds) {

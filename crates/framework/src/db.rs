@@ -229,6 +229,10 @@ impl DbConnection {
 
         Ok(())
     }
+
+    pub fn tables(&self) -> &Vec<TableConfig> {
+        &self.tables
+    }
 }
 
 /// Used to identify a unique row in a table.
@@ -344,182 +348,8 @@ pub type PushTabledRecordFn = fn (&mut TabledBuilder, &DbConnection, String, Row
 
 impl Plugin for DbPlugin {
     fn build(self, context: &mut Context) {
-        add_db_commands(context);
         context.add_resource(EditCommandTuiState::default());
     }
-}
-
-fn add_db_commands(context: &mut Context) {
-    context
-        .add_command(Command::new("new")
-            .about("Add a new row to a table")
-            .arg(
-                Arg::new("table")
-                    .long("table")
-                    .required(true)
-                    .help("Name of the table to add a row in")
-            ),
-            process_new_command
-        )
-        .add_command(
-            Command::new("remove").alias("rm")
-                .about("Removes a row from a table")
-                .arg(
-                    Arg::new("table")
-                        .long("table")
-                        .required(true)
-                        .help("Name of the table to remove a row from")
-                )
-                .arg(
-                    Arg::new("row-id")
-                        .long("row-id")
-                        .value_parser(clap::value_parser!(i64))
-                        .required(true)
-                        .help("Row ID to remove")
-                ),
-            process_remove_command
-        )
-        .add_command(
-            Command::new("list").alias("ls")
-                .about("Lists the rows of a table")
-                .arg(
-                    Arg::new("table")
-                        .long("table")
-                        .required(true)
-                        .help("Name of the table to list rows from")
-                ),
-            process_list_command
-        )
-        .add_command(
-            Command::new("set")
-               .about("Sets a field in the given table and row.")
-                .arg(
-                    Arg::new("table")
-                        .long("table")
-                        .required(true)
-                        .help("Name of the table to to modify")
-                )
-                .arg(
-                    Arg::new("row-id")
-                        .long("row-id")
-                        .value_parser(clap::value_parser!(i64))
-                        .required(true)
-                        .help("Row ID to modify")
-                )
-                .arg(
-                    Arg::new("field")
-                        .long("field")
-                        .required(true)
-                        .help("Name of the field to modify")
-                )
-                .arg(
-                    Arg::new("value")
-                        .long("value")
-                        .required(true)
-                        .help("Value to set the field to")
-                ),
-            process_set_command
-        );
-}
-
-fn process_new_command(
-    context: &mut Context,
-    arg_matches: &ArgMatches, 
-) -> Result<CommandResponse> {
-    let db_connection = context.db_connection().unwrap();
-    let table: &String = arg_matches
-        .get_one::<String>("table")
-        .expect("Missing required argument");
-    let new_row_id = db_connection
-        .new_row_in_table(table.clone())
-        .expect("couldn't insert new row!");
-
-    Ok(CommandResponse::new(
-        format!("Inserted new row (id: {}) in table {}.", new_row_id, table)
-    ))
-}
-
-fn process_set_command(
-    context: &mut Context,
-    arg_matches: &ArgMatches,
-) -> Result<CommandResponse> {
-    let db_connection = context.db_connection().unwrap();
-    let table = arg_matches
-        .get_one::<String>("table")
-        .expect("Missing required argument");
-    let row_id = RowId(
-        *arg_matches
-            .get_one::<i64>("row-id")
-            .expect("Missing required argument"),
-    );
-    let field = arg_matches
-        .get_one::<String>("field")
-        .expect("Missing required argument");
-    let value = arg_matches
-        .get_one::<String>("value")
-        .expect("Missing required argument");
-
-    db_connection
-        .set_field_in_table(
-            table.clone(),
-            row_id,
-            field.clone(),
-            value.clone(),
-        )
-        .expect("couldn't set field!");
-    Ok(CommandResponse::default())
-}
-
-fn process_list_command(
-    context: &mut Context,
-    arg_matches: &ArgMatches,
-) -> Result<CommandResponse> {
-    let db_connection = context.db_connection().unwrap();
-    let table = arg_matches
-        .get_one::<String>("table")
-        .expect("Missing required argument");
-
-    let ids = db_connection
-        .get_table_row_ids(table.clone())
-        .expect("couldn't get table row ids");
-
-    let response_text = if ids.is_empty() {
-        format!("No entries in table {}.", table)
-    } else {
-        let Some(table_config) = db_connection.tables.iter().find(|t| t.table_name == *table) else {
-            return Err(Error::UnknownError);
-        };
-
-        let mut tabled_builder = TabledBuilder::default();
-        (table_config.push_tabled_header_fn)(&mut tabled_builder);
-        for id in ids {
-            (table_config.push_tabled_record_fn)(&mut tabled_builder, db_connection, table.to_string(), RowId(id))
-        }
-        tabled_builder.build().to_string()
-    };
-    Ok(CommandResponse::new(response_text))
-}
-
-fn process_remove_command(
-    context: &mut Context,
-    arg_matches: &ArgMatches,
-) -> Result<CommandResponse> {
-    let db_connection = context.db_connection().unwrap();
-    let table = arg_matches
-        .get_one::<String>("table")
-        .expect("Missing required argument");
-    let row_id = arg_matches
-        .get_one::<i64>("row-id")
-        .expect("Missing required argument");
-
-    db_connection
-        .remove_row_in_table(
-            table.clone(),
-            RowId(*row_id),
-        )
-        .expect("Couldn't remove row from table");
-
-    Ok(CommandResponse::default())
 }
 
 #[derive(Default)]

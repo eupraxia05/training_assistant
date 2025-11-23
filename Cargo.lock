@@ -984,6 +984,7 @@ dependencies = [
  "clap",
  "framework",
  "ratatui",
+ "tabled",
  "tui",
 ]
 
