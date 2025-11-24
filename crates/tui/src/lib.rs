@@ -9,6 +9,7 @@ use ratatui::widgets::{Block, BorderType, Paragraph, StatefulWidget, HighlightSp
 use ratatui::buffer::Buffer;
 use ratatui::Frame;
 use clap::{ArgMatches, Command};
+use std::collections::HashMap;
 
 #[derive(Clone)]
 pub struct TuiPlugin;
@@ -16,7 +17,6 @@ pub struct TuiPlugin;
 impl Plugin for TuiPlugin {
     fn build(self, context: &mut Context) {
         context.add_resource(TuiNewTabTypes::default());
-        context.add_resource(EmptyTabState::default());
         context.add_command(
             Command::new("tui")
                 .about("Opens an empty TUI session."),
@@ -28,8 +28,9 @@ impl Plugin for TuiPlugin {
 #[derive(Default)]
 pub struct Tui {
     quit_requested: bool,
-    tabs: Vec<Tab>,
+    tabs: Vec<(usize, Tab)>,
     selected_tab: usize,
+    next_tab_id: usize
 }
 
 impl Tui {
@@ -41,17 +42,32 @@ impl Tui {
         self.quit_requested
     }
 
-    pub fn with_tabs(mut self, tabs: impl Into<Vec<Tab>>) -> Self {
-        self.tabs = tabs.into();
-        self
-    }
-
     fn cycle_tab_next(&mut self) {
         self.selected_tab = (self.selected_tab + 1) % self.tabs.len();
     }
 
     fn cycle_tab_prev(&mut self) {
         self.selected_tab = (self.selected_tab - 1) % self.tabs.len();
+    }
+
+    pub fn add_tab(tab: Tab, context: &mut Context) {
+        let tab_funcs = match &tab.funcs {
+            Some(f) => f.clone(),
+            None => TabFuncs::new::<EmptyTabImpl>()
+        };
+        let next_tab_id = context.get_resource::<Tui>().unwrap().next_tab_id;
+        context.get_resource_mut::<Tui>().unwrap().tabs.push((next_tab_id, tab));
+        (tab_funcs.create_state_fn)(context, next_tab_id);
+        context.get_resource_mut::<Tui>().unwrap().next_tab_id += 1;
+    }
+
+    pub fn set_tab(tab_id: usize, tab: Tab, context: &mut Context) {
+        let tab_funcs = match &tab.funcs {
+            Some(f) => f.clone(),
+            None => TabFuncs::new::<EmptyTabImpl>()
+        };
+        context.get_resource_mut::<Tui>().unwrap().tabs.iter_mut().find(|t| t.0 == tab_id).unwrap().1 = tab;
+        (tab_funcs.create_state_fn)(context, tab_id);
     }
 }
 
@@ -86,6 +102,36 @@ impl Resource for TuiNewTabTypes {
     fn as_any_mut(&mut self) -> &mut dyn Any { self }
 }
 
+#[derive(Default)]
+pub struct TabState<T>
+    where T: Default
+{
+    states: HashMap<usize, T>
+}
+
+impl<T> TabState<T> 
+    where T: Default
+{
+    fn add_state(&mut self, tab_id: usize) {
+        self.states.insert(tab_id, T::default());
+    }
+
+    pub fn get_state_mut(&mut self, tab_id: usize) -> Option<&mut T> {
+        self.states.get_mut(&tab_id)
+    }
+
+    pub fn get_state(&mut self, tab_id: usize) -> Option<&T> {
+        self.states.get(&tab_id)
+    }
+}
+
+impl<T> Resource for TabState<T>
+    where T: 'static + Default
+{
+    fn as_any(&self) -> &dyn Any { self }
+    fn as_any_mut(&mut self) -> &mut dyn Any { self }
+}
+
 fn process_db_info_command(
     db_connection: &mut DbConnection
 ) -> Result<CommandResponse> {
@@ -103,6 +149,7 @@ fn process_db_info_command(
 
     Ok(CommandResponse::new(response_text))
 }
+
 pub struct Tab {
     title: String,
     funcs: Option<TabFuncs>,
@@ -127,16 +174,28 @@ impl Tab {
 }
 
 pub trait TabImpl {
+    type State: Default + 'static;
     fn title() -> String;
-    fn render(context: &mut Context, buffer: &mut Buffer, area: Rect, block: Block);
+    fn render(context: &mut Context, buffer: &mut Buffer, area: Rect, block: Block, tab_id: usize);
     fn keybinds() -> Vec<KeyBind>;
     fn handle_key(context: &mut Context, bind_name: &str, tab_idx: usize);
 }
 
 type TabTitleFn = fn () -> String;
-type TabRenderFn = fn (&mut Context, &mut Buffer, Rect, Block);
+type TabRenderFn = fn (&mut Context, &mut Buffer, Rect, Block, usize);
 type TabKeybindsFn = fn () -> Vec<KeyBind>;
 type TabHandleKeyFn = fn(&mut Context, &str, usize);
+type TabCreateStateFn = fn(&mut Context, tab_idx: usize);
+
+fn create_state<S>(context: &mut Context, tab_idx: usize) 
+    where S: 'static + Default
+{
+    if !context.has_resource::<TabState<S>>() {
+        context.add_resource(TabState::<S>::default());
+    }
+    context.get_resource_mut::<TabState<S>>().unwrap().add_state(tab_idx);
+}
+
 
 #[derive(Clone)]
 struct TabFuncs {
@@ -144,6 +203,7 @@ struct TabFuncs {
    render_fn: TabRenderFn,
    keybinds_fn: TabKeybindsFn,
    handle_key_fn: TabHandleKeyFn,
+   create_state_fn: TabCreateStateFn
 }
 
 impl TabFuncs {
@@ -155,6 +215,7 @@ impl TabFuncs {
             render_fn: T::render,
             keybinds_fn: T::keybinds,
             handle_key_fn: T::handle_key,
+            create_state_fn: create_state::<T::State>
         }
     }
 }
@@ -241,7 +302,7 @@ pub fn run_tui(context: &mut Context) -> std::result::Result<(), ()> {
         );
  
         let selected_tab = context.get_resource_mut::<Tui>().unwrap().selected_tab;
-        let tab_funcs = if let Some(funcs) = &context.get_resource_mut::<Tui>().unwrap().tabs[selected_tab].funcs {
+        let tab_funcs = if let Some(funcs) = &context.get_resource_mut::<Tui>().unwrap().tabs[selected_tab].1.funcs {
             funcs
         } else {
             &TabFuncs::new::<EmptyTabImpl>()
@@ -288,13 +349,14 @@ fn render_tui(context: &mut Context, frame: &mut ratatui::Frame, keybinds: &Vec<
     //frame.render_widget(Line::from("Training Assistant TUI").bold().centered(), header_area);
     render_tabs(context, frame);
     let selected_tab = context.get_resource_mut::<Tui>().unwrap().selected_tab;
-    let tab_funcs = if let Some(funcs) = &context.get_resource_mut::<Tui>().unwrap().tabs[selected_tab].funcs {
+    let tab_id = context.get_resource::<Tui>().unwrap().tabs[selected_tab].0;
+    let tab_funcs = if let Some(funcs) = &context.get_resource_mut::<Tui>().unwrap().tabs[selected_tab].1.funcs {
         funcs
     } else {
         &TabFuncs::new::<EmptyTabImpl>()
     };
     (tab_funcs.render_fn)(context, frame.buffer_mut(), content_area, Block::new()
-        .border_type(BorderType::QuadrantOutside).borders(Borders::ALL).bg(tailwind::SLATE.c900));
+        .border_type(BorderType::QuadrantOutside).borders(Borders::ALL).bg(tailwind::SLATE.c900), tab_id);
 
     let keybind_vertical_layout_constraints = (0..keybind_lines.len()).map(|_| Constraint::Length(1));
     let keybind_vertical_layout = Layout::vertical(keybind_vertical_layout_constraints).split(footer_area);
@@ -309,7 +371,7 @@ fn render_tui(context: &mut Context, frame: &mut ratatui::Frame, keybinds: &Vec<
 
 fn render_tabs(context: &mut Context, frame: &mut ratatui::Frame) {
     let titles = context.get_resource_mut::<Tui>().unwrap().tabs.iter()
-        .map(|t| t.title.clone());
+        .map(|t| t.1.title.clone());
     Tabs::new(titles)
         .highlight_style(Style::new().bg(tailwind::RED.c700).fg(tailwind::RED.c100))
         .padding(" ", "")
@@ -346,38 +408,44 @@ fn handle_event(context: &mut Context, ev: crossterm::event::Event, global_keybi
                 context.get_resource_mut::<Tui>().unwrap().cycle_tab_next();
             },
             "new_tab" => {
-                context.get_resource_mut::<Tui>().unwrap().tabs.push(Tab::new::<EmptyTabImpl>("New Tab"));
+                Tui::add_tab(Tab::new::<EmptyTabImpl>("New Tab"), context);
             },
             "close_tab" => {
                 let selected_tab = context.get_resource_mut::<Tui>().unwrap().selected_tab;
                 context.get_resource_mut::<Tui>().unwrap().tabs.remove(selected_tab);
             },
             "clear_tab" => {
+                // TODO: fix this w/ tab ids
                 let selected_tab = context.get_resource_mut::<Tui>().unwrap().selected_tab;
-                context.get_resource_mut::<Tui>().unwrap().tabs[selected_tab].funcs = Some(TabFuncs::new::<EmptyTabImpl>()); 
+                let selected_tab_id = context.get_resource_mut::<Tui>().unwrap().tabs[selected_tab].0;
+                let tab = Tab::new::<EmptyTabImpl>("New Tab");
+                Tui::set_tab(selected_tab_id, tab, context); 
             }
             _ => { }
         }
     } else if let Some(bind) = event_to_key_bind(ev.clone(), tab_keybinds) {
         let selected_tab = context.get_resource_mut::<Tui>().unwrap().selected_tab;
-        let funcs = context.get_resource_mut::<Tui>().unwrap().tabs[selected_tab].funcs.clone().unwrap_or(TabFuncs::new::<EmptyTabImpl>()).clone();
+        let funcs = context.get_resource_mut::<Tui>().unwrap().tabs[selected_tab].1.funcs.clone().unwrap_or(TabFuncs::new::<EmptyTabImpl>()).clone();
         (funcs.handle_key_fn)(context, bind.name.as_str(), selected_tab);
     }
 }
 
 fn process_tui_command(context: &mut Context, arg_matches: &ArgMatches) -> Result<CommandResponse> {
-    context.add_resource(Tui::default().with_tabs([Tab::new_empty("Empty Tab")]));
+    context.add_resource(Tui::default());
+    Tui::add_tab(Tab::new_empty("Empty Tab"), context);
     Ok(CommandResponse::new("Opening TUI session..."))
 }
 
 struct EmptyTabImpl;
 
 impl TabImpl for EmptyTabImpl {
+    type State = EmptyTabState;
+
     fn title() -> String {
         "Empty Tab".into()
     }
 
-    fn render(context: &mut Context, buffer: &mut Buffer, rect: Rect, block: Block) {
+    fn render(context: &mut Context, buffer: &mut Buffer, rect: Rect, block: Block, tab_id: usize) {
         let tui_new_tab_types = context.get_resource_mut::<TuiNewTabTypes>().unwrap();
         let items = tui_new_tab_types.types.iter().map(|t| t.name.clone());
         if items.len() > 0 {
@@ -386,7 +454,7 @@ impl TabImpl for EmptyTabImpl {
                 .highlight_style(Style::new().fg(Color::Black).bg(Color::White))
                 .highlight_symbol(">")
                 .highlight_spacing(HighlightSpacing::Always);
-            StatefulWidget::render(list, rect, buffer, &mut context.get_resource_mut::<EmptyTabState>().unwrap().list_state);
+            StatefulWidget::render(list, rect, buffer, &mut context.get_resource_mut::<TabState<EmptyTabState>>().expect("get_resource failed").get_state_mut(tab_id).unwrap().list_state);
         } else {
             Paragraph::new("No creatable tab types.").block(block).render(rect, buffer);
         }
@@ -421,16 +489,21 @@ impl TabImpl for EmptyTabImpl {
     fn handle_key(context: &mut Context, bind: &str, tab_idx: usize) {
         match bind {
             "move_up" => {
-                context.get_resource_mut::<EmptyTabState>().unwrap().list_state.select_previous();
+                context.get_resource_mut::<TabState<EmptyTabState>>().unwrap().get_state_mut(tab_idx).unwrap().list_state.select_previous();
             },
             "move_down" => {
-                context.get_resource_mut::<EmptyTabState>().unwrap().list_state.select_next();
+                context.get_resource_mut::<TabState<EmptyTabState>>().unwrap().get_state_mut(tab_idx).unwrap().list_state.select_next();
             },
             "select" => {
-                let selected_new_tab = context.get_resource_mut::<EmptyTabState>().unwrap().list_state.selected().unwrap();
+                let selected_new_tab = context.get_resource_mut::<TabState<EmptyTabState>>().unwrap().get_state(tab_idx).unwrap().list_state.selected().unwrap();
                 let tab_funcs = context.get_resource_mut::<TuiNewTabTypes>().unwrap().types[selected_new_tab].funcs.clone();
                 let selected_tab_idx = context.get_resource_mut::<Tui>().unwrap().selected_tab;
-                context.get_resource_mut::<Tui>().unwrap().tabs[selected_tab_idx].funcs = Some(tab_funcs); 
+                let selected_tab_id = context.get_resource_mut::<Tui>().unwrap().tabs[selected_tab_idx].0;
+                let tab = Tab {
+                    title: "New Tab".into(),
+                    funcs: Some(tab_funcs)
+                };
+                Tui::set_tab(selected_tab_id, tab, context); 
             }
             _ => { }
         }

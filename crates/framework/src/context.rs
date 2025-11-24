@@ -176,6 +176,24 @@ impl Context {
         None
     }
 
+    pub fn get_resource<R>(&self) -> Option<&R>
+        where R: Resource
+    {
+        let boxed = self.resources.get(&TypeId::of::<R>());
+        if let Some(b) = boxed {
+            if let Some(r) = b.as_any().downcast_ref::<R>() {
+                return Some(r);
+            }
+        }
+        None
+    }
+
+    pub fn has_resource<R>(&self) -> bool 
+        where R: Resource
+    {
+        self.resources.contains_key(&TypeId::of::<R>())
+    }
+
     /// Call this after adding plugins, tables, and 
     /// commands. Opens a connection to the database.
     pub fn startup(&mut self) -> Result<()> {

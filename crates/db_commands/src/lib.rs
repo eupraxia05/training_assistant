@@ -3,11 +3,11 @@ use framework::prelude::*;
 use clap::{Command, Arg, ArgMatches};
 use tui::{Tui, KeyBind, Tab, TabImpl, TuiNewTabTypes};
 use ratatui::{
-    widgets::{Wrap, Block, Paragraph, Widget},
+    widgets::{Wrap, Block, Paragraph, Widget, Row, Table},
     text::Line,
-    style::Stylize,
+    style::{Style, Stylize},
     buffer::Buffer,
-    layout::Rect,
+    layout::{Constraint, Rect},
 };
 use tabled::{builder::Builder as TabledBuilder};
 
@@ -123,18 +123,7 @@ impl Plugin for DbCommandsPlugin {
                 )
                 .subcommand_required(true),
                 process_db_command
-            )
-            .add_command(
-            Command::new("edit")
-                .about("Edits a table row in TUI mode.")
-                .arg(
-                    Arg::new("table")
-                        .long("table")
-                        .required(true)
-                        .help("Name of the table to edit")
-                ),
-            process_edit_command
-        );
+            );
 
         context.get_resource_mut::<TuiNewTabTypes>().unwrap().register_new_tab_type::<DbInfoTabImpl>("Database Info");
         context.get_resource_mut::<TuiNewTabTypes>().unwrap().register_new_tab_type::<EditTabImpl>("Edit Table");
@@ -292,25 +281,20 @@ fn erase_db(
     Ok(CommandResponse::default())
 }
 
-fn process_edit_command(
-    context: &mut Context, 
-    _matches: &ArgMatches
-) -> Result<CommandResponse> {
-    context.add_resource(Tui::default().with_tabs(
-        [Tab::new::<EditTabImpl>("tab 1"), Tab::new::<EditTabImpl>("tab 2")])
-    );
-    Ok(CommandResponse::new("Starting TUI session..."))
-}
-
 struct DbInfoTabImpl;
 
+#[derive(Default)]
+struct DbInfoTabState;
+
 impl TabImpl for DbInfoTabImpl {
+    type State = DbInfoTabState;
+
     fn title() -> String {
         "Database Info".into()
     }
     
     fn render(context: &mut Context, buffer: &mut Buffer,
-        rect: Rect, block: Block
+        rect: Rect, block: Block, tab_id: usize
     ) {
         let db_connection = context.db_connection().unwrap();
         let text = db_info_text(db_connection);
@@ -329,15 +313,33 @@ impl TabImpl for DbInfoTabImpl {
 
 struct EditTabImpl;
 
+struct EditTabState;
+
 impl TabImpl for EditTabImpl {
+    type State = DbInfoTabState;
+
     fn title() -> String {
         "Edit Tab".into()
     }
 
     fn render(context: &mut Context, buffer: &mut Buffer,
-        rect: Rect, block: Block
+        rect: Rect, block: Block, tab_id: usize
     ) {
-        Paragraph::new("edit tab content").block(block).render(rect, buffer);     
+        let rows = [Row::new(vec!["Cell1", "Cell2", "Cell3"])];
+        let widths = [Constraint::Length(5), Constraint::Length(5), Constraint::Length(10)];
+        let table = Table::new(rows, widths)
+            .column_spacing(1)
+            .header(
+                Row::new(vec!["Col1", "Col2", "Col3"])
+                .style(Style::new().bold())
+                .bottom_margin(1)
+            )
+            .footer(Row::new(vec!["27 rows"]))
+            .block(block.clone())
+            .row_highlight_style(Style::new().reversed())
+            .highlight_symbol(">>");
+        table.render(rect, buffer);
+        //Paragraph::new("edit tab content").block(block).render(rect, buffer); 
     }
 
     fn keybinds() -> Vec<KeyBind> {
