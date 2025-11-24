@@ -1,9 +1,14 @@
+//! A utility library for exporting LaTeX documents.
 use directories::ProjectDirs;
 use latex::Document;
-use std::io::Write;
 use std::path::Path;
 use std::process::{Command, Stdio};
 
+/// Exports a LaTeX document to PDF in a given directory.
+///
+/// * `out_folder` - The directory to put the PDF in.
+/// * `file_name` - The file name to use (excluding the .pdf extension)
+/// * `doc` - The document to export.
 pub fn write_document(
     out_folder: &Path,
     file_name: &str,
@@ -18,8 +23,6 @@ pub fn write_document(
     let temp_dir =
         project_dirs.cache_dir().join("documents");
 
-    println!("temp dir: {:?}", temp_dir);
-
     let tex_path =
         temp_dir.join(format!("{}.tex", file_name));
     let pdf_path =
@@ -30,14 +33,9 @@ pub fn write_document(
     std::fs::create_dir_all(temp_dir.clone())
         .map_err(|e| e.to_string())?;
 
-    println!("rendering latex document...");
     let rendered = latex::print(doc)
         .map_err(|e| e.to_string())?;
     
-    println!(
-        "writing latex document to {:?}...",
-        tex_path
-    );
     std::fs::write(tex_path.clone(), rendered)
         .map_err(|e| e.to_string())?;
 
@@ -50,9 +48,7 @@ pub fn write_document(
     ))
     .arg(tex_path);
 
-    println!("Executing {:?}", cmd);
-
-    let cmd_output =
+    let _cmd_output =
         cmd.output().map_err(|e| e.to_string())?;
 
     // TODO: make an argument to enable this
@@ -70,11 +66,6 @@ pub fn write_document(
     std::io::stderr()
         .flush()
         .map_err(|e| e.to_string())?;*/
-
-    println!(
-        "copying generated pdf at {:?} to {:?}",
-        pdf_path, dest_path
-    );
 
     std::fs::copy(pdf_path, dest_path)
         .map_err(|e| e.to_string())?;
