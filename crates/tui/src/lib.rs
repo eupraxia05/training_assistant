@@ -253,11 +253,20 @@ impl TabFuncs {
 /// A single keybind, associating together an internal name, display name, key code, and modifiers.
 #[derive(Clone)]
 pub struct KeyBind {
-    name: String,
-    display_key: String,
-    display_name: String,
-    key_code: KeyCode,
-    modifiers: KeyModifiers,
+    /// The internal name to use to denote the bind.
+    pub name: String,
+
+    /// The text to display representing the key (combination).
+    pub display_key: String,
+
+    /// The text to display representing the key action.
+    pub display_name: String,
+    
+    /// The code of the key to bind.
+    pub key_code: KeyCode,
+
+    /// Additional modifiers (ctrl, alt, shift, etc)
+    pub modifiers: KeyModifiers,
 }
 
 impl KeyBind {
@@ -462,7 +471,7 @@ impl TabImpl for EmptyTabImpl {
     type State = EmptyTabState;
 
     fn title() -> String {
-        "Empty Tab".into()
+        "🔆 Empty Tab".into()
     }
 
     fn render(context: &mut Context, buffer: &mut Buffer, rect: Rect, block: Block, tab_id: usize) {

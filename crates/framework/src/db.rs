@@ -280,6 +280,9 @@ pub trait TableRow: Sized + std::fmt::Debug {
     /// Called for each row in a table, after
     /// `push_tabled_header`.
     fn push_tabled_record(builder: &mut TabledBuilder, db_connection: &DbConnection, table_name: String, row_id: RowId);
+
+    /// Gets all the field names of this row type.
+    fn field_names() -> Vec<String>;
 }
 
 /// A trait for types stored in a SQL database. Useful
@@ -306,6 +309,7 @@ pub trait TableField {
 
 /// A configuration for a SQL table. Used when opening a
 /// database connection to ensure all needed tables exist.
+// TODO: this should have a new<T> automatically setting the function pointers
 #[derive(Clone)]
 pub struct TableConfig {
     /// The name of the table.
@@ -321,6 +325,9 @@ pub struct TableConfig {
 
     /// See `PushTabledRecordFn`.
     pub push_tabled_record_fn: PushTabledRecordFn,
+
+    /// See `FieldNamesFn`.
+    pub field_names_fn: FieldNamesFn
 }
 
 /// A pointer to a function used to set up a table. Generally
@@ -340,6 +347,13 @@ pub type PushTabledHeaderFn = fn (&mut TabledBuilder);
 /// points to the `TableRow::push_tabled_record`
 /// implementation for the row type.
 pub type PushTabledRecordFn = fn (&mut TabledBuilder, &DbConnection, String, RowId);
+
+/// A pointer to a function used to get the field names
+/// for a table's row type. Generally points to the
+/// `TableRow::field_names` implementation for the
+/// row type.
+pub type FieldNamesFn =
+    fn() -> Vec<String>;
 
 //////////////////////////////////////////////////////
 // PRIVATE IMPLEMENTATION

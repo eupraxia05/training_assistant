@@ -1,13 +1,14 @@
 //! A plugin that adds a set of commands for editing the database.
 use framework::prelude::*;
 use clap::{Command, Arg, ArgMatches};
-use tui::{KeyBind, TabImpl, TuiNewTabTypes};
+use tui::{KeyBind, TabImpl, TuiNewTabTypes, TabState};
 use ratatui::{
-    widgets::{Wrap, Block, Paragraph, Widget, Row, Table},
-    style::{Style, Stylize},
+    widgets::{Wrap, Block, Paragraph, Widget, Row, Table, List, ListState, HighlightSpacing, StatefulWidget},
+    style::{Style, Stylize, Color},
     buffer::Buffer,
     layout::{Constraint, Rect},
 };
+use crossterm::event::{KeyModifiers, KeyEventKind, KeyCode, Event};
 use tabled::{builder::Builder as TabledBuilder};
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -316,42 +317,123 @@ impl TabImpl for DbInfoTabImpl {
 struct EditTabImpl;
 
 #[derive(Default)]
-struct EditTabState;
+struct EditTabState {
+    list_state: ListState,
+    table_name: Option<String>,
+    available_tables: Vec<String>,
+}
 
 impl TabImpl for EditTabImpl {
     type State = EditTabState;
 
     fn title() -> String {
-        "Edit Tab".into()
+        "✏️ Edit Table".into()
     }
 
-    fn render(_: &mut Context, buffer: &mut Buffer,
-        rect: Rect, block: Block, _: usize
+    fn render(context: &mut Context, buffer: &mut Buffer,
+        rect: Rect, block: Block, tab_id: usize
     ) {
-        
+        let is_selecting_table = {
+            // TODO: remove this unwrap
+            let state = context.get_resource_mut::<TabState<EditTabState>>().unwrap().get_state_mut(tab_id).unwrap();
+            state.table_name.is_none()
+        };
 
-        let rows = [Row::new(vec!["Cell1", "Cell2", "Cell3"])];
-        let widths = [Constraint::Length(5), Constraint::Length(5), Constraint::Length(10)];
-        let table = Table::new(rows, widths)
-            .column_spacing(1)
-            .header(
-                Row::new(vec!["Col1", "Col2", "Col3"])
-                .style(Style::new().bold())
-                .bottom_margin(1)
-            )
-            .footer(Row::new(vec!["27 rows"]))
-            .block(block.clone())
-            .row_highlight_style(Style::new().reversed())
-            .highlight_symbol(">>");
-        table.render(rect, buffer);
+        if is_selecting_table {
+            // TODO: remove this unwrap
+            let table_names = {
+                let db_connection = context.get_resource_mut::<DbConnection>().unwrap(); 
+                db_connection.tables().iter().map(|t| t.table_name.clone()).collect::<Vec<_>>()
+            };
+
+            // TODO: get rid of these unwraps
+            context.get_resource_mut::<TabState<EditTabState>>().unwrap().get_state_mut(tab_id).unwrap().available_tables = table_names.clone();
+
+            if table_names.len() > 0 {
+                let list = List::new(table_names)
+                    .block(block)
+                    .highlight_style(Style::new().fg(Color::Black).bg(Color::White))
+                    .highlight_symbol(">")
+                    .highlight_spacing(HighlightSpacing::Always);
+
+                // TODO: remove these unwraps
+                let state = context.get_resource_mut::<TabState<EditTabState>>().unwrap().get_state_mut(tab_id).unwrap();
+                StatefulWidget::render(list, rect, buffer, &mut state.list_state); 
+            } else {
+                Paragraph::new("No tables.").block(block).render(rect, buffer);
+            }
+        } else {
+            let rows = [Row::new(vec!["Cell1", "Cell2", "Cell3"])];
+            // TODO: dejank this
+            let table_name = context.get_resource_mut::<TabState<EditTabState>>().unwrap().get_state_mut(tab_id).unwrap().table_name.clone().unwrap();
+            // TODO: get rid of this unwrap
+            let db_connection = context.get_resource_mut::<DbConnection>().unwrap();
+            let table_config = db_connection.tables().iter().find(|t| t.table_name == table_name).unwrap();
+            let field_names = (table_config.field_names_fn)();
+            let widths = field_names.iter().map(|f| Constraint::Min(f.len().try_into().unwrap()));
+            let table = Table::new(rows, widths)
+                .column_spacing(1)
+                .header(
+                    Row::new(field_names)
+                    .style(Style::new().bold())
+                    .bottom_margin(1)
+                )
+                .footer(Row::new(vec!["27 rows"]))
+                .block(block.clone())
+                .row_highlight_style(Style::new().reversed())
+                .highlight_symbol(">>");
+            Widget::render(table, rect, buffer);
+
+        }
+
         //Paragraph::new("edit tab content").block(block).render(rect, buffer); 
     }
 
     fn keybinds() -> Vec<KeyBind> {
-        Vec::new()
+        vec![
+            KeyBind {
+                name: "move_up".into(),
+                display_key: "Up".into(),
+                display_name: "Move Up".into(),
+                key_code: KeyCode::Up,
+                modifiers: KeyModifiers::NONE,
+            },
+            KeyBind {
+                name: "move_down".into(),
+                display_key: "Down".into(),
+                display_name: "Move Down".into(),
+                key_code: KeyCode::Down,
+                modifiers: KeyModifiers::NONE,
+            },
+            KeyBind {
+                name: "select".into(),
+                display_key: "Enter".into(),
+                display_name: "Select".into(),
+                key_code: KeyCode::Enter,
+                modifiers: KeyModifiers::NONE,
+            }
+        ]
     }
     
-    fn handle_key(_: &mut Context, _: &str, _: usize) {
-
+    fn handle_key(context: &mut Context, bind: &str, tab_id: usize) {
+        // TODO: get rid of these unwraps
+        let state = context.get_resource_mut::<TabState<EditTabState>>().unwrap()
+            .get_state_mut(tab_id).unwrap();
+        
+        match bind {
+            "move_up" => {
+                state.list_state.select_previous();
+            },
+            "move_down" => {
+                state.list_state.select_next();
+            },
+            "select" => {
+                // TODO: get rid of this unwrap
+                // TODO: range check
+                let table_name = state.available_tables[state.list_state.selected().unwrap()].clone();
+                state.table_name = Some(table_name);
+            }
+            _ => { }
+        }
     }
 }
