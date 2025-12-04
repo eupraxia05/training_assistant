@@ -3,6 +3,8 @@
 use framework::prelude::*;
 use framework_derive_macros::TableRow;
 
+/// The plugin for the Training system. 
+/// Add this to set up the required tables and commands.
 #[derive(Clone)]
 pub struct TrainingPlugin;
 
