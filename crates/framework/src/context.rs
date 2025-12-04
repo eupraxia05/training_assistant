@@ -41,7 +41,7 @@ use std::any::{Any, TypeId};
 /// # context.in_memory_db(true);
 /// context.add_plugin(MyPlugin);
 /// context.startup()?;
-/// let db_connection = context.db_connection()?;
+/// let db_connection = context.get_resource_mut::<DbConnection>().ok_or(Error::NoConnectionError)?;
 /// # Ok(())
 /// # }
 /// ```
@@ -62,10 +62,6 @@ pub struct Context {
     /// with `Context::add_table`.
     tables: Vec<TableConfig>,
 
-    /// The database connection this Context creates.
-    /// Opened when `startup` is called.
-    db_connection: Option<DbConnection>,
-
     /// Whether or not the db connection should be opened in memory.
     open_db_in_memory: bool,
 
@@ -80,7 +76,6 @@ impl Context {
             plugins: Vec::default(),
             commands: Vec::default(),
             tables: Vec::default(),
-            db_connection: None,
             open_db_in_memory: false,
             resources: HashMap::new(),
         }
@@ -143,21 +138,6 @@ impl Context {
         self.open_db_in_memory = in_memory;
     }
 
-    /// Opens a database connection. Uses the default
-    /// db path, unless built in test config, in
-    /// which case it uses a separate test db path.
-    fn open_db_connection(
-        &self,
-    ) -> Result<DbConnection> {
-        if self.open_db_in_memory {
-            DbConnection::open_test(self.tables.clone())
-        } else {
-            DbConnection::open_default(
-                self.tables.clone(),
-            )
-        }
-    }
-
     pub fn add_resource<R>(&mut self, res: R)
         where R: Resource
     {
@@ -197,21 +177,17 @@ impl Context {
     /// Call this after adding plugins, tables, and 
     /// commands. Opens a connection to the database.
     pub fn startup(&mut self) -> Result<()> {
-        self.db_connection = Some(self.open_db_connection()?);
+        let db_connection = if self.open_db_in_memory {
+            DbConnection::open_test(self.tables.clone())
+        } else {
+            DbConnection::open_default(
+                self.tables.clone(),
+            )
+        }?;
+
+        self.add_resource(db_connection);
 
         Ok(())
-    }
-
-    /// Gets the database connection. Must be called 
-    /// after `setup`. Returns 
-    /// `Err(Error::NoConnectionError)` if the
-    /// connection has not been created yet.
-    pub fn db_connection(&mut self) -> Result<&mut DbConnection> {
-        if let Some(db_connection) = &mut self.db_connection {
-            Ok(db_connection)
-        } else {
-            Err(Error::NoConnectionError)
-        }
     }
 
     /// Executes a registered command from the given
@@ -235,10 +211,6 @@ impl Context {
         &mut self,
         command_str: &str,
     ) -> Result<CommandResponse> {
-        let Some(db_connection) = &mut self.db_connection else {
-            return Err(Error::NoConnectionError);
-        };
-
         // todo: this uses `tacl` as a dummy binary name
         // to make clap argument parsing work, but
         // it seems silly.

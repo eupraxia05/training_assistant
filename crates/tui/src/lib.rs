@@ -176,6 +176,7 @@ impl Tab {
 pub trait TabImpl {
     type State: Default + 'static;
     fn title() -> String;
+    // TODO: this should return Result<()>
     fn render(context: &mut Context, buffer: &mut Buffer, area: Rect, block: Block, tab_id: usize);
     fn keybinds() -> Vec<KeyBind>;
     fn handle_key(context: &mut Context, bind_name: &str, tab_idx: usize);

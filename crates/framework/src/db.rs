@@ -44,6 +44,11 @@ pub struct DbConnection {
     tables: Vec<TableConfig>,
 }
 
+impl Resource for DbConnection {
+    fn as_any(&self) -> &dyn Any { self }
+    fn as_any_mut(&mut self) -> &mut dyn Any { self }
+}
+
 impl DbConnection {
     /// Returns true if the connection is open.
     pub fn is_open(&self) -> bool {
@@ -629,7 +634,7 @@ mod test {
 
         // open the db connection
         let mut db_connection =
-            context.db_connection()?;
+            context.get_resource_mut::<DbConnection>().ok_or(Error::NoConnectionError)?;
 
         // check the db connection is open
         assert!(db_connection.is_open());

@@ -134,7 +134,7 @@ fn process_new_command(
     context: &mut Context,
     arg_matches: &ArgMatches, 
 ) -> Result<CommandResponse> {
-    let db_connection = context.db_connection().unwrap();
+    let db_connection = context.get_resource_mut::<DbConnection>().ok_or(Error::NoConnectionError)?;
     let table: &String = arg_matches
         .get_one::<String>("table")
         .expect("Missing required argument");
@@ -151,7 +151,7 @@ fn process_set_command(
     context: &mut Context,
     arg_matches: &ArgMatches,
 ) -> Result<CommandResponse> {
-    let db_connection = context.db_connection().unwrap();
+    let db_connection = context.get_resource_mut::<DbConnection>().ok_or(Error::NoConnectionError)?;
     let table = arg_matches
         .get_one::<String>("table")
         .expect("Missing required argument");
@@ -182,7 +182,7 @@ fn process_list_command(
     context: &mut Context,
     arg_matches: &ArgMatches,
 ) -> Result<CommandResponse> {
-    let db_connection = context.db_connection().unwrap();
+    let db_connection = context.get_resource_mut::<DbConnection>().ok_or(Error::NoConnectionError)?;
     let table = arg_matches
         .get_one::<String>("table")
         .expect("Missing required argument");
@@ -212,7 +212,7 @@ fn process_remove_command(
     context: &mut Context,
     arg_matches: &ArgMatches,
 ) -> Result<CommandResponse> {
-    let db_connection = context.db_connection().unwrap();
+    let db_connection = context.get_resource_mut::<DbConnection>().ok_or(Error::NoConnectionError)?;
     let table = arg_matches
         .get_one::<String>("table")
         .expect("Missing required argument");
@@ -236,11 +236,11 @@ fn process_db_command(
 ) -> Result<CommandResponse> {
     match matches.subcommand() {
         Some(("info", _)) => {
-            let db_connection = context.db_connection().unwrap();
+            let db_connection = context.get_resource_mut::<DbConnection>().ok_or(Error::NoConnectionError)?;
             process_db_info_command(db_connection)
         }
         Some(("erase", _)) => {
-            let db_connection = context.db_connection().unwrap();
+            let db_connection = context.get_resource_mut::<DbConnection>().ok_or(Error::NoConnectionError)?;
             erase_db(db_connection)
         }
         Some(("backup", _)) => {
@@ -296,7 +296,8 @@ impl TabImpl for DbInfoTabImpl {
     fn render(context: &mut Context, buffer: &mut Buffer,
         rect: Rect, block: Block, tab_id: usize
     ) {
-        let db_connection = context.db_connection().unwrap();
+        // TODO: remove this unwrap()
+        let db_connection = context.get_resource_mut::<DbConnection>().unwrap();
         let text = db_info_text(db_connection);
 
         Paragraph::new(text).block(block).wrap(Wrap { trim: true }).render(rect, buffer);
@@ -325,6 +326,8 @@ impl TabImpl for EditTabImpl {
     fn render(context: &mut Context, buffer: &mut Buffer,
         rect: Rect, block: Block, tab_id: usize
     ) {
+        
+
         let rows = [Row::new(vec!["Cell1", "Cell2", "Cell3"])];
         let widths = [Constraint::Length(5), Constraint::Length(5), Constraint::Length(10)];
         let table = Table::new(rows, widths)

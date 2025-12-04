@@ -133,7 +133,7 @@ fn process_invoice_command(
 ) -> Result<CommandResponse> {
     // get the database connection
     let db_connection =
-        context.db_connection().unwrap();
+        context.get_resource_mut::<DbConnection>().ok_or(Error::NoConnectionError)?;
 
     // check for the generate subcommand and run it if desired
     if let Some(("generate", sub_m)) =
@@ -409,7 +409,7 @@ mod test {
         context.in_memory_db(true);
 
         context.startup()?;
-        let db_connection = context.db_connection()?;
+        let db_connection = context.get_resource_mut::<DbConnection>().ok_or(Error::NoConnectionError)?;
 
         let invoice =
             setup_invoice_data(db_connection)?;
@@ -507,7 +507,7 @@ mod test {
 
         context.startup()?;
 
-        let db_connection = context.db_connection()?;
+        let db_connection = context.get_resource_mut::<DbConnection>().ok_or(Error::NoConnectionError)?;
 
         let invoice =
             setup_invoice_data(db_connection)?;
