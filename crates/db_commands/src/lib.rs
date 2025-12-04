@@ -1,10 +1,9 @@
 //! A plugin that adds a set of commands for editing the database.
 use framework::prelude::*;
 use clap::{Command, Arg, ArgMatches};
-use tui::{Tui, KeyBind, Tab, TabImpl, TuiNewTabTypes};
+use tui::{KeyBind, TabImpl, TuiNewTabTypes};
 use ratatui::{
     widgets::{Wrap, Block, Paragraph, Widget, Row, Table},
-    text::Line,
     style::{Style, Stylize},
     buffer::Buffer,
     layout::{Constraint, Rect},
@@ -15,6 +14,8 @@ use tabled::{builder::Builder as TabledBuilder};
 // PUBLIC API
 ///////////////////////////////////////////////////////////////////////////////
 
+/// The plugin for database commands. Add this to set up the required
+/// commands.
 #[derive(Clone)]
 pub struct DbCommandsPlugin;
 
@@ -294,7 +295,7 @@ impl TabImpl for DbInfoTabImpl {
     }
     
     fn render(context: &mut Context, buffer: &mut Buffer,
-        rect: Rect, block: Block, tab_id: usize
+        rect: Rect, block: Block, _: usize
     ) {
         // TODO: remove this unwrap()
         let db_connection = context.get_resource_mut::<DbConnection>().unwrap();
@@ -314,17 +315,18 @@ impl TabImpl for DbInfoTabImpl {
 
 struct EditTabImpl;
 
+#[derive(Default)]
 struct EditTabState;
 
 impl TabImpl for EditTabImpl {
-    type State = DbInfoTabState;
+    type State = EditTabState;
 
     fn title() -> String {
         "Edit Tab".into()
     }
 
-    fn render(context: &mut Context, buffer: &mut Buffer,
-        rect: Rect, block: Block, tab_id: usize
+    fn render(_: &mut Context, buffer: &mut Buffer,
+        rect: Rect, block: Block, _: usize
     ) {
         
 
@@ -349,7 +351,7 @@ impl TabImpl for EditTabImpl {
         Vec::new()
     }
     
-    fn handle_key(context: &mut Context, bind_name: &str, tab_idx: usize) {
+    fn handle_key(_: &mut Context, _: &str, _: usize) {
 
     }
 }

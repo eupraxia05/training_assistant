@@ -43,9 +43,7 @@ fn main() -> Result<()> {
             if let Some(text) = r.text() {
                 println!("{}", text);
             }
-            let tui_requested = if let Some(tui) = context.get_resource_mut::<Tui>() {
-                true
-            } else { false };
+            let tui_requested = context.has_resource::<Tui>();
 
             if tui_requested {
                 tui::run_tui(&mut context).expect("failed to run tui session"); 
@@ -59,26 +57,3 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-fn tui_session(context: &mut Context) -> std::result::Result<(), ()> {
-    color_eyre::install().map_err(|_| ())?;
-
-    let mut terminal = ratatui::init();
-    let mut tui_state = TuiState::default();
-    let result = {
-        loop {
-            terminal.draw(render).map_err(|_| ())?;
-            let ev = crossterm::event::read().map_err(|_| ())?; 
-            /*(update_fn)(context, &mut tui_state, &ev);
-            if tui_state.should_quit() { 
-                break Ok(());
-            }*/
-        }
-    };
-    ratatui::restore();
-
-    result
-}
-
-fn render(frame: &mut ratatui::Frame) {
-    frame.render_widget("hello world", frame.area());
-}

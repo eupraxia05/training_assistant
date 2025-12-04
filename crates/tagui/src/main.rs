@@ -1,3 +1,5 @@
+//! The GUI application for Training Assistant.
+
 fn main() -> eframe::Result {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
