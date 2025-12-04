@@ -138,12 +138,16 @@ impl Context {
         self.open_db_in_memory = in_memory;
     }
 
+    /// Adds a `Resource` to the resource registry. Overwrites
+    /// the existing entry if it already exists.
     pub fn add_resource<R>(&mut self, res: R)
         where R: Resource
     {
         self.resources.insert(TypeId::of::<R>(), Box::new(res));
     }
 
+    /// Gets a mutable `Resource` reference by type if it was 
+    /// added with `add_resource`. Otherwise, returns `None`.
     pub fn get_resource_mut<R>(&mut self) -> Option<&mut R>
         where R: Resource
     {
@@ -156,6 +160,8 @@ impl Context {
         None
     }
 
+    /// Gets a `Resource` reference by type if it was added
+    /// with `add_resource`. Otherwise, returns `None`.
     pub fn get_resource<R>(&self) -> Option<&R>
         where R: Resource
     {
@@ -168,6 +174,7 @@ impl Context {
         None
     }
 
+    /// Returns `true` if this `Context` has the specified `Resource` type.
     pub fn has_resource<R>(&self) -> bool 
         where R: Resource
     {
@@ -270,23 +277,29 @@ pub struct CommandResponse {
     text: Option<String>,
 }
 
+/// The state of a TUI session.
+// TODO: this should probably be moved to the tui crate
 #[derive(Default)]
 pub struct TuiState {
     should_quit: bool
 }
 
 impl TuiState {
+    /// Returns `true` if the application should quit.
     pub fn should_quit(&self) -> bool {
         self.should_quit
     }
 
+    /// Requests the process running the TUI to quit.
     pub fn request_quit(&mut self) {
         self.should_quit = true;
     }
 }
 
+/// A function to render the TUI into a `ratatui::Frame`.
 pub type TuiRenderFn = fn (&mut Context, &mut ratatui::Frame);
 
+/// A function to update a TUI given a `crossterm::event::Event`.
 pub type TuiUpdateFn = fn (&mut Context, &mut TuiState, &crossterm::event::Event);
 
 impl CommandResponse {
@@ -316,8 +329,13 @@ pub trait Plugin {
     fn build(self, context: &mut Context) -> ();
 }
 
+/// A singleton data type managed by a `Context`. Use `Context::add_resource` to add one,
+/// and `Context::get_resource<T>` to get it.
 pub trait Resource: Any {
+    /// Returns this type as a reference to a generic `std::any::Any` type.
     fn as_any(&self) -> &dyn Any;
+
+    /// Retyrns this type as a mutable reference to a generic `std::any::Any` type.
     fn as_any_mut(&mut self) -> &mut dyn Any;
 }
 

@@ -1,9 +1,7 @@
 use crate::{
     Error, Result,
-    context::{CommandResponse, Context, Plugin, TuiState, Resource},
+    context::{Context, Plugin, Resource},
 };
-use clap::{Arg, ArgMatches, Command};
-use framework_derive_macros::TableRow;
 use rusqlite::{
     Connection, ToSql, params, types::FromSql,
 };
@@ -11,12 +9,6 @@ use std::fs;
 use std::path::PathBuf;
 use std::fmt::{Display, Formatter};
 use tabled::{builder::Builder as TabledBuilder};
-use ratatui::{
-    style::{Style, Stylize, Color},
-    text::Line,
-    widgets::{Block, Paragraph, BorderType}
-};
-use crossterm::event::{Event, KeyEvent, KeyCode, KeyEventKind};
 use std::any::Any;
 
 //////////////////////////////////////////////////////
@@ -235,6 +227,8 @@ impl DbConnection {
         Ok(())
     }
 
+    /// Gets the `TableConfigs` this `Context` was created
+    /// with.
     pub fn tables(&self) -> &Vec<TableConfig> {
         &self.tables
     }
@@ -352,64 +346,10 @@ pub type PushTabledRecordFn = fn (&mut TabledBuilder, &DbConnection, String, Row
 //////////////////////////////////////////////////////
 
 impl Plugin for DbPlugin {
-    fn build(self, context: &mut Context) {
-        context.add_resource(EditCommandTuiState::default());
+    fn build(self, _: &mut Context) {
+    
     }
 }
-
-#[derive(Default)]
-struct EditCommandTuiState {
-    table: String
-}
-
-impl Resource for EditCommandTuiState {
-    fn as_any(&self) -> &dyn Any { self }
-    fn as_any_mut(&mut self) -> &mut dyn Any { self }
-}
-
-/*fn render_edit_tui(context: &mut Context, frame: &mut ratatui::Frame) {
-    let table = if let Some(state) = context.get_resource_mut::<EditCommandTuiState>() {
-        Some(state.table.clone())
-    } else { None };
-
-    let title = format!(" ✏️ Editing table: {} ", table.clone().unwrap_or("<err>".into()));
-
-    let db_connection = context.db_connection().unwrap();
-
-    let row_ids = db_connection.get_table_row_ids(table.unwrap_or_default()).unwrap();
-
-    let body = format!("{} rows", row_ids.len());
-
-    let paragraph = Paragraph::new(body)
-        .centered()
-        .block(
-            Block::bordered()
-                .border_type(BorderType::Double)
-                .border_style(Style::default().fg(Color::Indexed(088)))
-                .style(Style::default().bg(Color::Indexed(233)))
-                .title_style(Style::default().fg(Color::Indexed(251)).bg(Color::Indexed(088)))
-                .title(Line::from(title.bold()).centered())
-                .title_bottom(Line::from(" Exit <Q> ".bold()).centered())
-        );
-        
-    frame.render_widget(paragraph, frame.area());
-}
-
-fn update_edit_tui(context: &mut Context, tui_state: &mut TuiState, ev: &crossterm::event::Event) {
-    match ev {
-        Event::Key(key_event) => {
-            if key_event.kind == KeyEventKind::Press {
-                if key_event.code == KeyCode::Char('q') {
-                    tui_state.request_quit();
-                }
-                if let Some(state) = context.get_resource_mut::<EditCommandTuiState>() {
-                
-                }
-            }
-        }
-        _ => { }
-    }
-}*/
 
 impl DbConnection {
     // opens a db connection at the default db path
