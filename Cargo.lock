@@ -493,9 +493,11 @@ dependencies = [
  "framework",
  "framework_derive_macros",
  "latex",
+ "ratatui",
  "rusqlite",
  "tabled",
  "training",
+ "tui",
 ]
 
 [[package]]
@@ -3633,6 +3635,7 @@ dependencies = [
  "framework_derive_macros",
  "rusqlite",
  "tabled",
+ "tui",
 ]
 
 [[package]]

@@ -9,6 +9,12 @@ use latex::{
 };
 use std::path::PathBuf;
 use training::{Client, Trainer};
+use tui::{TabImpl, KeyBind};
+use ratatui::buffer::Buffer;
+use ratatui::Frame;
+use ratatui::layout::Rect;
+use ratatui::widgets::{Block, Paragraph, Widget};
+use ratatui::text::Line;
 
 ///////////////////////////////////////////////////////////////////////////////
 // PUBLIC API
@@ -95,7 +101,9 @@ impl Plugin for InvoicePlugin {
                     )
                 ),
                 process_invoice_command
-            );
+        );
+
+        context.get_resource_mut::<tui::TuiNewTabTypes>().unwrap().register_new_tab_type::<ExportInvoiceTabImpl>("Export Invoice");
     }
 }
 
@@ -284,6 +292,30 @@ fn generate_latex(
     ));
 
     Ok(doc)
+}
+
+// TODO: implement this
+struct ExportInvoiceTabImpl;
+
+#[derive(Default)]
+struct ExportInvoiceTabState;
+
+impl TabImpl for ExportInvoiceTabImpl {
+    type State = ExportInvoiceTabState;
+
+    fn title() -> String { "Export Invoice".into() }
+
+    fn render(context: &mut Context, buffer: &mut Buffer, rect: Rect, block: Block, tab_id: usize) {
+        Paragraph::new(Line::from("Export Invoice not implemented.")).block(block).render(rect, buffer);
+    }
+
+    fn keybinds() -> Vec<KeyBind> {
+        vec!()
+    }
+
+    fn handle_key(context: &mut Context, bind_name: &str, tab_idx: usize) {
+
+    }
 }
 
 #[cfg(test)]

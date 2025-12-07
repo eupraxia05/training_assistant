@@ -561,3 +561,17 @@ impl Resource for EmptyTabState {
         self
     }
 }
+
+pub mod prelude {
+    pub use crate::{
+        TabImpl, KeyBind, TuiNewTabTypes
+    };
+
+    pub use ratatui::{
+        Frame,
+        buffer::Buffer,
+        layout::Rect,
+        widgets::{Block, Paragraph, Widget},
+        text::Line,
+    };
+}

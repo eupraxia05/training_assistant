@@ -8,6 +8,7 @@ framework = { version = "0.1.0", path = "../framework" }
 framework_derive_macros = { version = "0.1.0", path = "../framework_derive_macros" }
 rusqlite = "0.37.0"
 tabled = "0.20.0"
+tui = { version = "0.1.0", path = "../tui" }
 
 [lints]
 workspace = true

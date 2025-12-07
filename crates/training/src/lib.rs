@@ -2,6 +2,7 @@
 
 use framework::prelude::*;
 use framework_derive_macros::TableRow;
+use tui::prelude::*;
 
 /// The plugin for the Training system. 
 /// Add this to set up the required tables and commands.
@@ -12,6 +13,7 @@ impl Plugin for TrainingPlugin {
     fn build(self, context: &mut Context) {
         context.add_table::<Trainer>("trainer")
             .add_table::<Client>("client");
+        context.get_resource_mut::<TuiNewTabTypes>().unwrap().register_new_tab_type::<ScheduleTabImpl>("Schedule")
     }
 }
 
@@ -65,3 +67,29 @@ impl Client {
         &self.name
     }
 }
+
+
+// TODO: implement this
+struct ScheduleTabImpl;
+
+#[derive(Default)]
+struct ScheduleTabState;
+
+impl TabImpl for ScheduleTabImpl {
+    type State = ScheduleTabState;
+
+    fn title() -> String { "Schedule".into() }
+
+    fn render(context: &mut Context, buffer: &mut Buffer, rect: Rect, block: Block, tab_id: usize) {
+        Paragraph::new(Line::from("Schedule UI not implemented.")).block(block).render(rect, buffer);
+    }
+
+    fn keybinds() -> Vec<KeyBind> {
+        vec!()
+    }
+
+    fn handle_key(context: &mut Context, bind_name: &str, tab_idx: usize) {
+
+    }
+}
+

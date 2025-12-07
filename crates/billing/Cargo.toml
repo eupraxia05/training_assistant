@@ -13,6 +13,8 @@ rusqlite = "0.37.0"
 framework_derive_macros = { version = "0.1.0", path = "../framework_derive_macros" }
 tabled = "0.20.0"
 directories = "6.0.0"
+tui = { version = "0.1.0", path = "../tui" }
+ratatui = "0.29.0"
 
 [lints]
 workspace = true
