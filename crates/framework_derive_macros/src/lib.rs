@@ -60,6 +60,7 @@ fn generate_table_row_impl(
     let from_table_row_fn_definition = generate_table_row_from_table_row_fn_definition(parsed_fields);
     let tabled_fn_definitions = generate_tabled_fn_definitions(parsed_fields);
     let field_names_fn_definition = generate_field_names_fn_definition(parsed_fields);
+    let get_fields_as_strings_fn_definition = generate_get_fields_as_strings_fn_definition(parsed_fields);
 
     let struct_name = parsed_struct.name.clone();
 
@@ -72,6 +73,8 @@ fn generate_table_row_impl(
             #tabled_fn_definitions
 
             #field_names_fn_definition
+
+            #get_fields_as_strings_fn_definition
         }
     }
 }
@@ -201,6 +204,23 @@ fn generate_field_names_fn_definition(fields: &venial::NamedFields) -> proc_macr
     quote::quote!(
         fn field_names() -> Vec<String> {
             vec![#field_names]
+        }
+    )
+}
+
+fn generate_get_fields_as_strings_fn_definition(fields: &venial::NamedFields) -> proc_macro2::TokenStream {
+    let mut get_fields_as_strings = proc_macro2::TokenStream::new();
+
+    for (field, _) in fields.fields.iter() {
+        let get_field = format!("result.push(format!(\"{{:?}}\", {}::from_table_field(db_connection, table_name.clone(), row_id, \"{}\".into()).unwrap_or_default()));", type_expr_to_type_str(&field.ty), field.name.to_string());
+        get_fields_as_strings.extend(get_field.parse::<proc_macro2::TokenStream>());
+    }
+
+    quote::quote!(
+        fn get_fields_as_strings(db_connection: &DbConnection, table_name: String, row_id: RowId) -> Vec<String> {
+            let mut result = Vec::new();
+            #get_fields_as_strings
+            result
         }
     )
 }

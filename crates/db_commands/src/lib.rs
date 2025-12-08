@@ -363,13 +363,22 @@ impl TabImpl for EditTabImpl {
                 Paragraph::new("No tables.").block(block).render(rect, buffer);
             }
         } else {
-            let rows = [Row::new(vec!["Cell1", "Cell2", "Cell3"])];
             // TODO: dejank this
             let table_name = context.get_resource_mut::<TabState<EditTabState>>().unwrap().get_state_mut(tab_id).unwrap().table_name.clone().unwrap();
             // TODO: get rid of this unwrap
             let db_connection = context.get_resource_mut::<DbConnection>().unwrap();
             let table_config = db_connection.tables().iter().find(|t| t.table_name == table_name).unwrap();
             let field_names = (table_config.field_names_fn)();
+           
+            // TODO: remove this unwrap
+            let row_ids = db_connection.get_table_row_ids(table_name.clone()).unwrap();
+            
+            let mut rows = Vec::new();
+
+            for row in &row_ids {
+                rows.push(Row::new((table_config.get_fields_as_strings_fn)(db_connection, table_name.clone(), RowId(*row))));
+            }
+            
             let widths = field_names.iter().map(|f| Constraint::Min(f.len().try_into().unwrap()));
             let table = Table::new(rows, widths)
                 .column_spacing(1)
@@ -378,15 +387,13 @@ impl TabImpl for EditTabImpl {
                     .style(Style::new().bold())
                     .bottom_margin(1)
                 )
-                .footer(Row::new(vec!["27 rows"]))
+                .footer(Row::new(vec![format!("{} rows", row_ids.len())]))
                 .block(block.clone())
                 .row_highlight_style(Style::new().reversed())
                 .highlight_symbol(">>");
             Widget::render(table, rect, buffer);
 
         }
-
-        //Paragraph::new("edit tab content").block(block).render(rect, buffer); 
     }
 
     fn keybinds() -> Vec<KeyBind> {

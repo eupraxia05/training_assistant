@@ -235,7 +235,8 @@ impl DbConnection {
 }
 
 /// Used to identify a unique row in a table.
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+// TODO: don't love that this implements Default, was necessary to implement FieldType
+#[derive(Copy, Clone, Debug, Eq, Default, PartialEq)]
 pub struct RowId(pub i64);
 
 impl Display for RowId {
@@ -283,6 +284,8 @@ pub trait TableRow: Sized + std::fmt::Debug {
 
     /// Gets all the field names of this row type.
     fn field_names() -> Vec<String>;
+
+    fn get_fields_as_strings(db_connection: &DbConnection, table_name: String, row_id: RowId) -> Vec<String>;
 }
 
 /// A trait for types stored in a SQL database. Useful
@@ -327,7 +330,9 @@ pub struct TableConfig {
     pub push_tabled_record_fn: PushTabledRecordFn,
 
     /// See `FieldNamesFn`.
-    pub field_names_fn: FieldNamesFn
+    pub field_names_fn: FieldNamesFn,
+    
+    pub get_fields_as_strings_fn: GetFieldsAsStringsFn
 }
 
 impl TableConfig {
@@ -342,7 +347,8 @@ impl TableConfig {
             setup_fn: T::setup,
             push_tabled_header_fn: T::push_tabled_header,
             push_tabled_record_fn: T::push_tabled_record,
-            field_names_fn: T::field_names
+            field_names_fn: T::field_names,
+            get_fields_as_strings_fn: T::get_fields_as_strings,
         }
     }
 }
@@ -371,6 +377,8 @@ pub type PushTabledRecordFn = fn (&mut TabledBuilder, &DbConnection, String, Row
 /// row type.
 pub type FieldNamesFn =
     fn() -> Vec<String>;
+
+pub type GetFieldsAsStringsFn = fn(&DbConnection, String, RowId) -> Vec<String>;
 
 /// A resource to hold the tables that should be requested on startup.
 #[derive(Default)]
