@@ -11,3 +11,6 @@ ratatui = "0.29.0"
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+insta = "1.44.3"

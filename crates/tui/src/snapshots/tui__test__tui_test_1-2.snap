@@ -1,0 +1,20 @@
+---
+source: crates/tui/src/lib.rs
+expression: terminal.backend()
+---
+" 🔆 Empty Tab  🔆 Empty Tab     " Hidden by multi-width symbols: [(2, " "), (16, " ")]
+"▛▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▜"
+"▌No creatable tab types.       ▐"
+"▌                              ▐"
+"▌                              ▐"
+"▌                              ▐"
+"▌                              ▐"
+"▌                              ▐"
+"▙▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▟"
+"<Q> Quit <Ctrl+Left> Prev Tab   "
+"<Ctrl+Right> Next Tab           "
+"<Ctrl+T> New Tab                "
+"<Ctrl+E> Close Tab              "
+"<Ctrl+R> Clear Tab              "
+"<Up> Move Up <Down> Move Down   "
+"<Enter> Select                  "

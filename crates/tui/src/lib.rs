@@ -278,6 +278,65 @@ impl KeyBind {
     }
 }
 
+fn global_keybinds() -> Vec<KeyBind> {
+    vec!(
+        KeyBind {
+            name: "quit".into(),
+            display_key: "Q".into(),
+            display_name: "Quit".into(),
+            key_code: KeyCode::Char('q'),
+            modifiers: KeyModifiers::NONE
+        },
+        KeyBind {
+            name: "prev_tab".into(),
+            display_key: "Ctrl+Left".into(),
+            display_name: "Prev Tab".into(),
+            key_code: KeyCode::Left,
+            modifiers: KeyModifiers::CONTROL,
+        },
+        KeyBind {
+            name: "next_tab".into(),
+            display_key: "Ctrl+Right".into(),
+            display_name: "Next Tab".into(),
+            key_code: KeyCode::Right,
+            modifiers: KeyModifiers::CONTROL,
+        },
+        KeyBind {
+            name: "new_tab".into(),
+            display_key: "Ctrl+T".into(),
+            display_name: "New Tab".into(),
+            key_code: KeyCode::Char('t'),
+            modifiers: KeyModifiers::CONTROL,
+        },
+        KeyBind {
+            name: "close_tab".into(),
+            display_key: "Ctrl+E".into(),
+            display_name: "Close Tab".into(),
+            key_code: KeyCode::Char('e'),
+            modifiers: KeyModifiers::CONTROL,
+        },
+        KeyBind {
+            name: "clear_tab".into(),
+            display_key: "Ctrl+R".into(),
+            display_name: "Clear Tab".into(),
+            key_code: KeyCode::Char('r'),
+            modifiers: KeyModifiers::CONTROL,
+        }
+    )
+}    
+
+fn get_selected_tab_keybinds(context: &mut Context) -> Vec<KeyBind> {
+    let selected_tab = context.get_resource_mut::<Tui>().unwrap().selected_tab;
+    let tab_funcs = if let Some(funcs) = &context.get_resource_mut::<Tui>().unwrap().tabs[selected_tab].1.funcs {
+        funcs
+    } else {
+        &TabFuncs::new::<EmptyTabImpl>()
+    };
+
+    (tab_funcs.keybinds_fn)()
+
+}
+
 // TODO: use a better result type
 /// Runs a TUI session in the terminal.
 ///
@@ -285,63 +344,9 @@ impl KeyBind {
 pub fn run_tui(context: &mut Context) -> std::result::Result<(), ()> { 
     let mut terminal = ratatui::init();
     let result = loop {
-        let global_keybinds = vec!(
-            KeyBind {
-                name: "quit".into(),
-                display_key: "Q".into(),
-                display_name: "Quit".into(),
-                key_code: KeyCode::Char('q'),
-                modifiers: KeyModifiers::NONE
-            },
-            KeyBind {
-                name: "prev_tab".into(),
-                display_key: "Ctrl+Left".into(),
-                display_name: "Prev Tab".into(),
-                key_code: KeyCode::Left,
-                modifiers: KeyModifiers::CONTROL,
-            },
-            KeyBind {
-                name: "next_tab".into(),
-                display_key: "Ctrl+Right".into(),
-                display_name: "Next Tab".into(),
-                key_code: KeyCode::Right,
-                modifiers: KeyModifiers::CONTROL,
-            },
-            KeyBind {
-                name: "new_tab".into(),
-                display_key: "Ctrl+T".into(),
-                display_name: "New Tab".into(),
-                key_code: KeyCode::Char('t'),
-                modifiers: KeyModifiers::CONTROL,
-            },
-            KeyBind {
-                name: "close_tab".into(),
-                display_key: "Ctrl+E".into(),
-                display_name: "Close Tab".into(),
-                key_code: KeyCode::Char('e'),
-                modifiers: KeyModifiers::CONTROL,
-            },
-            KeyBind {
-                name: "clear_tab".into(),
-                display_key: "Ctrl+R".into(),
-                display_name: "Clear Tab".into(),
-                key_code: KeyCode::Char('r'),
-                modifiers: KeyModifiers::CONTROL,
-            }
-        );
- 
-        let selected_tab = context.get_resource_mut::<Tui>().unwrap().selected_tab;
-        let tab_funcs = if let Some(funcs) = &context.get_resource_mut::<Tui>().unwrap().tabs[selected_tab].1.funcs {
-            funcs
-        } else {
-            &TabFuncs::new::<EmptyTabImpl>()
-        };
-
-        let tab_keybinds = (tab_funcs.keybinds_fn)();
-
-        terminal.draw(|f| render_tui(context, f, &global_keybinds, &tab_keybinds)).map_err(|_| ())?;
+        draw_tui(context, &mut terminal)?;
         let ev = crossterm::event::read().map_err(|_| ())?;
-        handle_event(context, ev, &global_keybinds, &tab_keybinds);
+        handle_event(context, ev);
         if context.get_resource_mut::<Tui>().unwrap().should_quit() {
             break Ok(());
         }
@@ -350,11 +355,20 @@ pub fn run_tui(context: &mut Context) -> std::result::Result<(), ()> {
     result
 }
 
-fn render_tui(context: &mut Context, frame: &mut ratatui::Frame, keybinds: &Vec<KeyBind>, tab_keybinds: &Vec<KeyBind>) {
-    // TODO: there has to be a better way to do this
-    let mut tab_keybinds_copy = tab_keybinds.clone();
-    let mut combined_keybinds = keybinds.clone();
-    combined_keybinds.append(&mut tab_keybinds_copy);
+// TODO: result type is incorrect
+pub fn draw_tui<B>(context: &mut Context, terminal: &mut ratatui::Terminal<B>) -> std::result::Result<(), ()> 
+    where B: ratatui::backend::Backend
+{
+    // TODO: this error handling is incorrect
+    terminal.draw(|f| render_tui(context, f)).map_err(|_| ())?;
+    Ok(()) 
+}
+
+fn render_tui(context: &mut Context, frame: &mut ratatui::Frame) {
+    let global_keybinds = global_keybinds();
+    let mut tab_keybinds = get_selected_tab_keybinds(context);
+    let mut combined_keybinds = global_keybinds.clone();
+    combined_keybinds.append(&mut tab_keybinds);
 
     let mut keybind_lines = vec!(Vec::new());
     let mut width_so_far = 0;
@@ -424,8 +438,10 @@ fn event_to_key_bind(ev: crossterm::event::Event, keybinds: &Vec<KeyBind>) -> Op
     keybinds.iter().find(|k| key_code == k.key_code && modifiers == k.modifiers)
 }
 
-fn handle_event(context: &mut Context, ev: crossterm::event::Event, global_keybinds: &Vec<KeyBind>, tab_keybinds: &Vec<KeyBind>) {
-    if let Some(bind) = event_to_key_bind(ev.clone(), global_keybinds) {
+fn handle_event(context: &mut Context, ev: crossterm::event::Event) {
+    let global_keybinds = global_keybinds();
+    let tab_keybinds = get_selected_tab_keybinds(context);
+    if let Some(bind) = event_to_key_bind(ev.clone(), &global_keybinds) {
         match bind.name.as_str() {
             "quit" => {
                 context.get_resource_mut::<Tui>().unwrap().request_quit();
@@ -452,7 +468,7 @@ fn handle_event(context: &mut Context, ev: crossterm::event::Event, global_keybi
             }
             _ => { }
         }
-    } else if let Some(bind) = event_to_key_bind(ev.clone(), tab_keybinds) {
+    } else if let Some(bind) = event_to_key_bind(ev.clone(), &tab_keybinds) {
         let selected_tab = context.get_resource_mut::<Tui>().unwrap().selected_tab;
         let funcs = context.get_resource_mut::<Tui>().unwrap().tabs[selected_tab].1.funcs.clone().unwrap_or(TabFuncs::new::<EmptyTabImpl>()).clone();
         (funcs.handle_key_fn)(context, bind.name.as_str(), selected_tab);
@@ -565,7 +581,7 @@ impl Resource for EmptyTabState {
 /// Common imports for working with the `tui` module.
 pub mod prelude {
     pub use crate::{
-        TabImpl, KeyBind, TuiNewTabTypes
+        TuiPlugin, Tui, TabImpl, KeyBind, TuiNewTabTypes
     };
 
     pub use ratatui::{
@@ -575,4 +591,48 @@ pub mod prelude {
         widgets::{Block, Paragraph, Widget},
         text::Line,
     };
+}
+
+#[cfg(test)]
+mod test {
+    use framework::prelude::*;
+    use crate::prelude::*;
+
+    #[test]
+    fn tui_test_1() -> Result<()> {
+        let mut context = Context::new();
+        context.add_plugin(TuiPlugin);
+        context.startup()?;
+        let response = context.execute("tui")?;
+        assert!(context.has_resource::<Tui>());
+        assert!(response.text().is_some());
+        assert_eq!(response.text().unwrap(), "Opening TUI session...");
+        let mut backend = ratatui::backend::TestBackend::new(32, 16);
+        let mut terminal = ratatui::Terminal::new(backend).unwrap();
+        crate::draw_tui(&mut context, &mut terminal).unwrap(); 
+        insta::assert_snapshot!(terminal.backend());
+        // TODO: get rid of the namespace spam here
+        // create a new tab
+        crate::handle_event(&mut context, 
+            crossterm::event::Event::Key(crossterm::event::KeyEvent {
+               code: crossterm::event::KeyCode::Char('t'),
+               kind: crossterm::event::KeyEventKind::Press,
+               state: crossterm::event::KeyEventState::empty(),
+               modifiers: crossterm::event::KeyModifiers::CONTROL
+            })
+        );
+        crate::draw_tui(&mut context, &mut terminal).unwrap(); 
+        insta::assert_snapshot!(terminal.backend());
+        // request quit
+        crate::handle_event(&mut context, 
+            crossterm::event::Event::Key(crossterm::event::KeyEvent {
+               code: crossterm::event::KeyCode::Char('q'),
+               kind: crossterm::event::KeyEventKind::Press,
+               state: crossterm::event::KeyEventState::empty(),
+               modifiers: crossterm::event::KeyModifiers::NONE
+            })
+        );
+        assert!(context.get_resource::<Tui>().unwrap().should_quit());
+        Ok(())
+    }
 }
