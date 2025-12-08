@@ -334,11 +334,11 @@ impl TableConfig {
     /// Creates a new TableConfig with the given row type (`T`) and the given table name.
     ///
     /// * `table_name` - The name to give the table.
-    pub fn new<T>(table_name: String) -> Self
+    pub fn new<T>(table_name: impl Into<String>) -> Self
         where T: TableRow 
     {
         Self {
-            table_name,
+            table_name: table_name.into(),
             setup_fn: T::setup,
             push_tabled_header_fn: T::push_tabled_header,
             push_tabled_record_fn: T::push_tabled_record,
@@ -372,6 +372,47 @@ pub type PushTabledRecordFn = fn (&mut TabledBuilder, &DbConnection, String, Row
 pub type FieldNamesFn =
     fn() -> Vec<String>;
 
+/// A resource to hold the tables that should be requested on startup.
+#[derive(Default)]
+pub struct DbTableConfigs {
+    configs: Vec<TableConfig>
+}
+
+// TODO: autogenerate this
+impl Resource for DbTableConfigs {
+    fn as_any(&self) -> &dyn Any { self }
+    fn as_any_mut(&mut self) -> &mut dyn Any { self }
+}
+
+impl DbTableConfigs {
+    fn add_table(&mut self, table: TableConfig) {
+        self.configs.push(table);
+    }
+}
+
+/// An extension to `Context` to add database functionality acessible directly from the context.
+pub trait DbContextExt {
+    /// Adds a new table configuration. Must be called before `Context::startup`.
+    ///
+    /// * `table` - The table configuration to add.
+    fn add_table(&mut self, table: TableConfig) -> &mut Context;
+}
+
+impl DbContextExt for Context {
+    fn add_table(&mut self, table: TableConfig) -> &mut Context {
+        if !self.has_resource::<DbTableConfigs>() {
+            let mut configs = DbTableConfigs::default();
+            configs.add_table(table);
+            self.add_resource(configs);
+        } else {
+            // this unwrap is safe, as we know this resource exists
+            self.get_resource_mut::<DbTableConfigs>().unwrap().add_table(table);
+        }
+
+        self
+    }
+}
+
 //////////////////////////////////////////////////////
 // PRIVATE IMPLEMENTATION
 //////////////////////////////////////////////////////
@@ -384,18 +425,22 @@ impl Plugin for DbPlugin {
 
 impl DbConnection {
     // opens a db connection at the default db path
-    pub(crate) fn open_default(
-        table_configs: Vec<TableConfig>,
-    ) -> Result<Self> {
+    pub(crate) fn open_default(context: &Context) -> Result<Self> {
         assert!(!cfg!(test));
         let db_path = Self::get_default_db_path()?;
+        let table_configs = match context.get_resource::<DbTableConfigs>() {
+            Some(t) => t.configs.clone(),
+            None => Vec::new()
+        };
         Self::open_from_path(&db_path, table_configs)
     }
 
     // opens a db connection at a test db path
-    pub(crate) fn open_test(
-        table_configs: Vec<TableConfig>,
-    ) -> Result<Self> {
+    pub(crate) fn open_test(context: &Context) -> Result<Self> {
+        let table_configs = match context.get_resource::<DbTableConfigs>() {
+            Some(t) => t.configs.clone(),
+            None => Vec::new()
+        };
         Self::open_in_memory(table_configs)
     }
 
@@ -585,7 +630,7 @@ mod test {
 
     impl Plugin for TestPlugin {
         fn build(self, context: &mut Context) {
-            context.add_table::<TestTableRow>("foo");
+            context.add_table(TableConfig::new::<TestTableRow>("foo"));
         }
     }
 

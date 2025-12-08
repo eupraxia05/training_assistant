@@ -1,5 +1,5 @@
 use crate::db::{
-    DbConnection, TableConfig, TableRow,
+    DbConnection,
 };
 use crate::{Error, Result};
 
@@ -57,11 +57,6 @@ pub struct Context {
     /// Add one with `Context::add_command`.
     commands: Vec<(Command, ProcessCommandFn)>,
 
-    /// The tables this Context requests when
-    /// opening a database connection. Add a table
-    /// with `Context::add_table`.
-    tables: Vec<TableConfig>,
-
     /// Whether or not the db connection should be opened in memory.
     open_db_in_memory: bool,
 
@@ -75,7 +70,6 @@ impl Context {
         Self {
             plugins: Vec::default(),
             commands: Vec::default(),
-            tables: Vec::default(),
             open_db_in_memory: false,
             resources: HashMap::new(),
         }
@@ -108,20 +102,6 @@ impl Context {
     ) -> &mut Self {
         self.commands
             .push((command, process_command_fn));
-        self
-    }
-
-    /// Registers a new table with the context. Must
-    /// be called before `open_db_connection`.
-    pub fn add_table<R>(
-        &mut self,
-        table_name: impl Into<String>,
-    ) -> &mut Self
-    where
-        R: TableRow,
-    {
-        self.tables.push(TableConfig::new::<R>(table_name.into()));
-
         self
     }
 
@@ -180,11 +160,9 @@ impl Context {
     /// commands. Opens a connection to the database.
     pub fn startup(&mut self) -> Result<()> {
         let db_connection = if self.open_db_in_memory {
-            DbConnection::open_test(self.tables.clone())
+            DbConnection::open_test(self)
         } else {
-            DbConnection::open_default(
-                self.tables.clone(),
-            )
+            DbConnection::open_default(self)
         }?;
 
         self.add_resource(db_connection);

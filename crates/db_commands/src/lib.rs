@@ -8,7 +8,7 @@ use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Rect},
 };
-use crossterm::event::{KeyModifiers, KeyEventKind, KeyCode, Event};
+use crossterm::event::{KeyModifiers, KeyCode};
 use tabled::{builder::Builder as TabledBuilder};
 
 ///////////////////////////////////////////////////////////////////////////////

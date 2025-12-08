@@ -11,8 +11,8 @@ pub struct TrainingPlugin;
 
 impl Plugin for TrainingPlugin {
     fn build(self, context: &mut Context) {
-        context.add_table::<Trainer>("trainer")
-            .add_table::<Client>("client");
+        context.add_table(TableConfig::new::<Trainer>("trainer"))
+            .add_table(TableConfig::new::<Client>("client"));
        
         // TODO: conditionally compile this
         if let Some(new_tab_types) = context.get_resource_mut::<TuiNewTabTypes>() {
@@ -84,7 +84,7 @@ impl TabImpl for ScheduleTabImpl {
 
     fn title() -> String { "Schedule".into() }
 
-    fn render(context: &mut Context, buffer: &mut Buffer, rect: Rect, block: Block, tab_id: usize) {
+    fn render(_: &mut Context, buffer: &mut Buffer, rect: Rect, block: Block, _: usize) {
         Paragraph::new(Line::from("Schedule UI not implemented.")).block(block).render(rect, buffer);
     }
 
@@ -92,7 +92,7 @@ impl TabImpl for ScheduleTabImpl {
         vec!()
     }
 
-    fn handle_key(context: &mut Context, bind_name: &str, tab_idx: usize) {
+    fn handle_key(_: &mut Context, _: &str, _: usize) {
 
     }
 }

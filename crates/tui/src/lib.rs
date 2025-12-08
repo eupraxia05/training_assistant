@@ -562,6 +562,7 @@ impl Resource for EmptyTabState {
     }
 }
 
+/// Common imports for working with the `tui` module.
 pub mod prelude {
     pub use crate::{
         TabImpl, KeyBind, TuiNewTabTypes
