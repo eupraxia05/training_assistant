@@ -278,31 +278,6 @@ pub struct CommandResponse {
     text: Option<String>,
 }
 
-/// The state of a TUI session.
-// TODO: this should probably be moved to the tui crate
-#[derive(Default)]
-pub struct TuiState {
-    should_quit: bool
-}
-
-impl TuiState {
-    /// Returns `true` if the application should quit.
-    pub fn should_quit(&self) -> bool {
-        self.should_quit
-    }
-
-    /// Requests the process running the TUI to quit.
-    pub fn request_quit(&mut self) {
-        self.should_quit = true;
-    }
-}
-
-/// A function to render the TUI into a `ratatui::Frame`.
-pub type TuiRenderFn = fn (&mut Context, &mut ratatui::Frame);
-
-/// A function to update a TUI given a `crossterm::event::Event`.
-pub type TuiUpdateFn = fn (&mut Context, &mut TuiState, &crossterm::event::Event);
-
 impl CommandResponse {
     /// Creates a new CommandResponse with a
     /// text response. Use `Default::default()`
