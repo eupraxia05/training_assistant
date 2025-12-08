@@ -9,7 +9,10 @@ use latex::{
 };
 use std::path::PathBuf;
 use training::{Client, Trainer};
+
+#[cfg(feature="tui")]
 use tui::{TabImpl, KeyBind};
+
 use ratatui::buffer::Buffer;
 use ratatui::Frame;
 use ratatui::layout::Rect;
@@ -103,7 +106,10 @@ impl Plugin for InvoicePlugin {
                 process_invoice_command
         );
 
-        context.get_resource_mut::<tui::TuiNewTabTypes>().unwrap().register_new_tab_type::<ExportInvoiceTabImpl>("Export Invoice");
+        #[cfg(feature="tui")]
+        if let Some(new_tab_types) = context.get_resource_mut::<tui::TuiNewTabTypes>() {
+            new_tab_types.register_new_tab_type::<ExportInvoiceTabImpl>("Export Invoice");
+        }
     }
 }
 
@@ -295,11 +301,14 @@ fn generate_latex(
 }
 
 // TODO: implement this
+#[cfg(feature="tui")]
 struct ExportInvoiceTabImpl;
 
+#[cfg(feature="tui")]
 #[derive(Default)]
 struct ExportInvoiceTabState;
 
+#[cfg(feature="tui")]
 impl TabImpl for ExportInvoiceTabImpl {
     type State = ExportInvoiceTabState;
 

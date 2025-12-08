@@ -13,7 +13,11 @@ impl Plugin for TrainingPlugin {
     fn build(self, context: &mut Context) {
         context.add_table::<Trainer>("trainer")
             .add_table::<Client>("client");
-        context.get_resource_mut::<TuiNewTabTypes>().unwrap().register_new_tab_type::<ScheduleTabImpl>("Schedule")
+       
+        // TODO: conditionally compile this
+        if let Some(new_tab_types) = context.get_resource_mut::<TuiNewTabTypes>() {
+            new_tab_types.register_new_tab_type::<ScheduleTabImpl>("Schedule")
+        }
     }
 }
 
