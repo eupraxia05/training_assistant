@@ -12,7 +12,8 @@ pub struct TrainingPlugin;
 impl Plugin for TrainingPlugin {
     fn build(self, context: &mut Context) {
         context.add_table(TableConfig::new::<Trainer>("trainer"))
-            .add_table(TableConfig::new::<Client>("client"));
+            .add_table(TableConfig::new::<Client>("client"))
+            .add_table(TableConfig::new::<Exercise>("exercise"));
        
         // TODO: conditionally compile this
         if let Some(new_tab_types) = context.get_resource_mut::<TuiNewTabTypes>() {
@@ -73,6 +74,11 @@ impl Client {
 }
 
 
+#[derive(TableRow, Debug)]
+pub struct Exercise {
+    name: String
+}
+
 // TODO: implement this
 struct ScheduleTabImpl;
 
@@ -96,4 +102,3 @@ impl TabImpl for ScheduleTabImpl {
 
     }
 }
-
