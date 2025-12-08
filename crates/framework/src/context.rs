@@ -120,13 +120,7 @@ impl Context {
     where
         R: TableRow,
     {
-        self.tables.push(TableConfig {
-            table_name: table_name.into(),
-            setup_fn: R::setup,
-            push_tabled_header_fn: R::push_tabled_header,
-            push_tabled_record_fn: R::push_tabled_record,
-            field_names_fn: R::field_names,
-        });
+        self.tables.push(TableConfig::new::<R>(table_name.into()));
 
         self
     }

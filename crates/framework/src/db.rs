@@ -330,6 +330,23 @@ pub struct TableConfig {
     pub field_names_fn: FieldNamesFn
 }
 
+impl TableConfig {
+    /// Creates a new TableConfig with the given row type (`T`) and the given table name.
+    ///
+    /// * `table_name` - The name to give the table.
+    pub fn new<T>(table_name: String) -> Self
+        where T: TableRow 
+    {
+        Self {
+            table_name,
+            setup_fn: T::setup,
+            push_tabled_header_fn: T::push_tabled_header,
+            push_tabled_record_fn: T::push_tabled_record,
+            field_names_fn: T::field_names
+        }
+    }
+}
+
 /// A pointer to a function used to set up a table. Generally
 /// points to the `TableRow::setup` implementation for a
 /// given row type.
