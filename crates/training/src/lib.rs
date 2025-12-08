@@ -75,7 +75,7 @@ impl Client {
     }
 }
 
-
+/// An exercise in the exercise library.
 #[derive(TableRow, Debug)]
 pub struct Exercise {
     name: String

@@ -4,19 +4,19 @@ use tui::Tui;
 
 fn main() -> Result<()> {
     let mut context = Context::new();
-    context.add_plugin(DbPlugin);
+    context.add_plugin(DbPlugin)?;
 
     #[cfg(feature="tui")]
-    context.add_plugin(tui::TuiPlugin);
+    context.add_plugin(tui::TuiPlugin)?;
 
     #[cfg(feature="billing")]
-    context.add_plugin(billing::InvoicePlugin);
+    context.add_plugin(billing::InvoicePlugin)?;
 
     #[cfg(feature="training")]
-    context.add_plugin(training::TrainingPlugin);
+    context.add_plugin(training::TrainingPlugin)?;
 
     #[cfg(feature="db_commands")]
-    context.add_plugin(db_commands::DbCommandsPlugin);
+    context.add_plugin(db_commands::DbCommandsPlugin)?;
 
     context.startup()?;
 

@@ -356,6 +356,10 @@ pub fn run_tui(context: &mut Context) -> std::result::Result<(), ()> {
     result
 }
 
+/// Draws a frame of the TUI in the given `ratatui::Terminal`.
+///
+/// * `context` - The `Context` running the TUI.
+/// * `terminal` - The `ratatui::Terminal` to draw into.
 // TODO: result type is incorrect
 pub fn draw_tui<B>(context: &mut Context, terminal: &mut ratatui::Terminal<B>) -> std::result::Result<(), ()> 
     where B: ratatui::backend::Backend
@@ -602,13 +606,13 @@ mod test {
     #[test]
     fn tui_test_1() -> Result<()> {
         let mut context = Context::new();
-        context.add_plugin(TuiPlugin);
+        context.add_plugin(TuiPlugin)?;
         context.startup()?;
         let response = context.execute("tui")?;
         assert!(context.has_resource::<Tui>());
         assert!(response.text().is_some());
         assert_eq!(response.text().unwrap(), "Opening TUI session...");
-        let mut backend = ratatui::backend::TestBackend::new(32, 16);
+        let backend = ratatui::backend::TestBackend::new(32, 16);
         let mut terminal = ratatui::Terminal::new(backend).unwrap();
         crate::draw_tui(&mut context, &mut terminal).unwrap(); 
         insta::assert_snapshot!(terminal.backend());

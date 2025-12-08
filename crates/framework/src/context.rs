@@ -85,15 +85,14 @@ impl Context {
         P: Plugin + Clone + 'static,
     {
         if self.plugins.iter().any(|p| p.type_id == std::any::TypeId::of::<P>()) {
-            // TODO: use a better error type
-            return Err(Error::UnknownError); 
+            // TODO: output the plugin name
+            return Err(Error::CustomError("Tried to add a plugin twice!".into())); 
         }
 
         self.plugins.push(RegisteredPlugin {
-            plugin: Box::new(plugin.clone()),
             type_id: std::any::TypeId::of::<P>()
         });
-        plugin.build(self);
+        plugin.build(self)?;
 
         Ok(self)
     }
@@ -110,8 +109,8 @@ impl Context {
         process_command_fn: ProcessCommandFn,
     ) -> Result<&mut Self> {
         if self.commands.iter().any(|c| c.0.get_name() == command.get_name()) {
-            // TODO: use a better error type
-            return Err(Error::UnknownError);
+            // TODO: output the command name
+            return Err(Error::CustomError("Tried to add a command that already has been added!".into()));
         }
         self.commands
             .push((command, process_command_fn));
@@ -255,8 +254,7 @@ impl Default for Context {
     }
 }
 
-pub struct RegisteredPlugin {
-    plugin: Box<dyn Plugin>,
+struct RegisteredPlugin {
     type_id: TypeId
 }
 

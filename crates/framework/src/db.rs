@@ -285,6 +285,7 @@ pub trait TableRow: Sized + std::fmt::Debug {
     /// Gets all the field names of this row type.
     fn field_names() -> Vec<String>;
 
+    /// Gets all the fields of a row from a table, as strings.
     fn get_fields_as_strings(db_connection: &DbConnection, table_name: String, row_id: RowId) -> Vec<String>;
 }
 
@@ -331,7 +332,8 @@ pub struct TableConfig {
 
     /// See `FieldNamesFn`.
     pub field_names_fn: FieldNamesFn,
-    
+
+    /// See `GetFieldsAsStringsFn`.
     pub get_fields_as_strings_fn: GetFieldsAsStringsFn
 }
 
@@ -378,6 +380,9 @@ pub type PushTabledRecordFn = fn (&mut TabledBuilder, &DbConnection, String, Row
 pub type FieldNamesFn =
     fn() -> Vec<String>;
 
+/// A pointer to a function used to get the fields from a table row as strings.
+/// Generally points to the `TableRow::get_fields_as_strings` implementation for
+/// the row type.
 pub type GetFieldsAsStringsFn = fn(&DbConnection, String, RowId) -> Vec<String>;
 
 /// A resource to hold the tables that should be requested on startup.
@@ -653,7 +658,7 @@ mod test {
     fn db_table_ops_test() -> Result<()> {
         // create a context and add our test plugin
         let mut context = Context::new();
-        context.add_plugin(TestPlugin);
+        context.add_plugin(TestPlugin)?;
         context.in_memory_db(true);
 
         context.startup()?;
