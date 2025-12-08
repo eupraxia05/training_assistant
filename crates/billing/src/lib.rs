@@ -74,7 +74,7 @@ pub struct Charge {
 // PRIVATE IMPLEMENTATION
 ///////////////////////////////////////////////////////////////////////////////
 impl Plugin for InvoicePlugin {
-    fn build(self, context: &mut Context) {
+    fn build(self, context: &mut Context) -> Result<()> {
         // set up charge and invoice tables
         context
             .add_table(TableConfig::new::<Charge>("charge"))
@@ -103,12 +103,14 @@ impl Plugin for InvoicePlugin {
                     )
                 ),
                 process_invoice_command
-        );
+        )?;
 
         #[cfg(feature="tui")]
         if let Some(new_tab_types) = context.get_resource_mut::<tui::TuiNewTabTypes>() {
             new_tab_types.register_new_tab_type::<ExportInvoiceTabImpl>("Export Invoice");
         }
+
+        Ok(())
     }
 }
 

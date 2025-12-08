@@ -16,13 +16,14 @@ use std::collections::HashMap;
 pub struct TuiPlugin;
 
 impl Plugin for TuiPlugin {
-    fn build(self, context: &mut Context) {
+    fn build(self, context: &mut Context) -> Result<()> {
         context.add_resource(TuiNewTabTypes::default());
         context.add_command(
             Command::new("tui")
                 .about("Opens an empty TUI session."),
             process_tui_command
-        );
+        )?;
+        Ok(())
     }
 }
 

@@ -24,7 +24,7 @@ pub struct DbCommandsPlugin;
 // PRIVATE IMPLEMENTATION
 ///////////////////////////////////////////////////////////////////////////////
 impl Plugin for DbCommandsPlugin {
-    fn build(self, context: &mut Context) {        
+    fn build(self, context: &mut Context) -> Result<()> {        
         context
             .add_command(Command::new("new")
                 .about("Add a new row to a table")
@@ -35,7 +35,7 @@ impl Plugin for DbCommandsPlugin {
                         .help("Name of the table to add a row in")
                 ),
                 process_new_command
-            )
+            )?
             .add_command(
                 Command::new("remove").alias("rm")
                     .about("Removes a row from a table")
@@ -53,7 +53,7 @@ impl Plugin for DbCommandsPlugin {
                             .help("Row ID to remove")
                     ),
                 process_remove_command
-            )
+            )?
             .add_command(
                 Command::new("set")
                     .about("Sets a field in the given table and row.")
@@ -83,7 +83,7 @@ impl Plugin for DbCommandsPlugin {
                             .help("Value to set the field to")
                     ),
                 process_set_command
-            )
+            )?
             .add_command(
                 Command::new("list").alias("ls")
                     .about("Lists the rows of a table")
@@ -94,7 +94,7 @@ impl Plugin for DbCommandsPlugin {
                             .help("Name of the table to list rows from")
                     ),
                 process_list_command
-            )
+            )?
             .add_command(Command::new("db")
                 .about("View and update database configuration")
                 .subcommand(Command::new("info")
@@ -125,10 +125,11 @@ impl Plugin for DbCommandsPlugin {
                 )
                 .subcommand_required(true),
                 process_db_command
-            );
+            )?;
 
         context.get_resource_mut::<TuiNewTabTypes>().unwrap().register_new_tab_type::<DbInfoTabImpl>("Database Info");
         context.get_resource_mut::<TuiNewTabTypes>().unwrap().register_new_tab_type::<EditTabImpl>("Edit Table");
+        Ok(())
     }
 }
 

@@ -425,9 +425,10 @@ impl DbContextExt for Context {
 // PRIVATE IMPLEMENTATION
 //////////////////////////////////////////////////////
 
+// TODO: is this plugin needed?
 impl Plugin for DbPlugin {
-    fn build(self, _: &mut Context) {
-    
+    fn build(self, _: &mut Context) -> Result<()> {
+        Ok(())
     }
 }
 
@@ -637,8 +638,9 @@ mod test {
     struct TestPlugin;
 
     impl Plugin for TestPlugin {
-        fn build(self, context: &mut Context) {
+        fn build(self, context: &mut Context) -> Result<()> {
             context.add_table(TableConfig::new::<TestTableRow>("foo"));
+            Ok(())
         }
     }
 

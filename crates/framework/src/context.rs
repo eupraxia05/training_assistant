@@ -18,11 +18,12 @@ use std::any::{Any, TypeId};
 /// struct MyPlugin;
 ///
 /// impl Plugin for MyPlugin {
-///     fn build(self, context: &mut Context) {
+///     fn build(self, context: &mut Context) -> Result<()> {
 ///         context.add_command(
 ///             Command::new("foo"),
 ///             process_foo_command
-///         );
+///         )?;
+///         Ok(())
 ///     }
 /// }
 ///
@@ -76,7 +77,6 @@ impl Context {
     }
 
     /// Registers a plugin with the context.
-    // TODO: should be able to fail if the plugin has already been added
     pub fn add_plugin<P>(
         &mut self,
         plugin: P,
@@ -104,15 +104,18 @@ impl Context {
     /// * `process_command_fn`: A callback function
     ///     called with the command and its args
     ///     when the command is invoked.
-    // TODO: should check if another command by the same name has been added
     pub fn add_command(
         &mut self,
         command: Command,
         process_command_fn: ProcessCommandFn,
-    ) -> &mut Self {
+    ) -> Result<&mut Self> {
+        if self.commands.iter().any(|c| c.0.get_name() == command.get_name()) {
+            // TODO: use a better error type
+            return Err(Error::UnknownError);
+        }
         self.commands
             .push((command, process_command_fn));
-        self
+        Ok(self)
     }
 
     /// Sets whether or not the database should be
@@ -289,7 +292,7 @@ type ProcessCommandFn = fn(
 /// An interface for adding functionality to a Context. Inspired by Bevy's plugin interface.
 pub trait Plugin {
     /// Runs on adding the plugin to a Context. Use this to register commands, add tables, etc.
-    fn build(self, context: &mut Context) -> ();
+    fn build(self, context: &mut Context) -> Result<()>;
 }
 
 /// A singleton data type managed by a `Context`. Use `Context::add_resource` to add one,
@@ -313,16 +316,17 @@ mod test {
     struct TestPlugin;
 
     impl Plugin for TestPlugin {
-        fn build(self, context: &mut Context) {
+        fn build(self, context: &mut Context) -> Result<()> {
             context.add_command(
                 Command::new("test"),
                 process_test_command,
-            );
+            )?;
             context.add_command(
                 Command::new("test2"),
                 process_test2_command,
-            );
+            )?;
             context.add_resource(TestResource::default());
+            Ok(())
         }
     }
 
@@ -377,7 +381,10 @@ mod test {
 
         // adding the same plugin again should result in an error
         assert!(context.add_plugin(TestPlugin::default()).is_err());
-        
+    
+        // adding another test command should result in an error
+        assert!(context.add_command(Command::new("test"), process_test_command).is_err());
+
         context.in_memory_db(true);
         assert_eq!(context.commands.len(), 2);
         context.startup()?;

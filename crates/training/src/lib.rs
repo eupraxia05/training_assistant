@@ -10,15 +10,17 @@ use tui::prelude::*;
 pub struct TrainingPlugin;
 
 impl Plugin for TrainingPlugin {
-    fn build(self, context: &mut Context) {
+    fn build(self, context: &mut Context) -> Result<()> {
         context.add_table(TableConfig::new::<Trainer>("trainer"))
             .add_table(TableConfig::new::<Client>("client"))
             .add_table(TableConfig::new::<Exercise>("exercise"));
        
         // TODO: conditionally compile this
         if let Some(new_tab_types) = context.get_resource_mut::<TuiNewTabTypes>() {
-            new_tab_types.register_new_tab_type::<ScheduleTabImpl>("Schedule")
+            new_tab_types.register_new_tab_type::<ScheduleTabImpl>("Schedule");
         }
+
+        Ok(())
     }
 }
 
