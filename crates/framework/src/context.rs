@@ -76,6 +76,7 @@ impl Context {
     }
 
     /// Registers a plugin with the context.
+    // TODO: should be able to fail if the plugin has already been added
     pub fn add_plugin<P>(
         &mut self,
         plugin: P,
@@ -95,6 +96,7 @@ impl Context {
     /// * `process_command_fn`: A callback function
     ///     called with the command and its args
     ///     when the command is invoked.
+    // TODO: should check if another command by the same name has been added
     pub fn add_command(
         &mut self,
         command: Command,
@@ -191,7 +193,7 @@ impl Context {
         &mut self,
         command_str: &str,
     ) -> Result<CommandResponse> {
-        // todo: this uses `tacl` as a dummy binary name
+        // TODO: this uses `tacl` as a dummy binary name
         // to make clap argument parsing work, but
         // it seems silly.
         let mut command = Command::new("tacl")
@@ -321,6 +323,14 @@ mod test {
         fn as_any_mut(&mut self) -> &mut dyn Any { self }
     }
 
+    #[derive(Default)]
+    struct TestResource2;
+
+    impl Resource for TestResource2 {
+        fn as_any(&self) -> &dyn Any { self }
+        fn as_any_mut(&mut self) -> &mut dyn Any { self }
+    }
+
     static COMMAND_EXECUTED_COUNTER: AtomicUsize =
         AtomicUsize::new(0);
 
@@ -377,6 +387,15 @@ mod test {
         assert_eq!(res.as_ref().unwrap().foo, 0);
         res.unwrap().foo = 42;
         assert_eq!(context.get_resource_mut::<TestResource>().unwrap().foo, 42);
+
+        // re-adding a resource that was already added should just overwrite it
+        context.add_resource(TestResource { foo: 99 });
+        assert_eq!(context.get_resource::<TestResource>().unwrap().foo, 99);
+
+        // getting a resource that hasn't been added yet should return None
+        assert!(context.get_resource::<TestResource2>().is_none());
+        assert!(!context.has_resource::<TestResource2>());
+
         Ok(())
     }
 }
