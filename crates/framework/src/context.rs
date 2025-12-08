@@ -51,7 +51,7 @@ use std::any::{Any, TypeId};
 pub struct Context {
     /// The `Plugin`s registered with this `Context`.
     /// Add one with `Context::add_plugin`.
-    plugins: Vec<Box<dyn Plugin>>,
+    plugins: Vec<RegisteredPlugin>,
 
     /// The `Command`s registered with this `Context`.
     /// Add one with `Context::add_command`.
@@ -80,14 +80,22 @@ impl Context {
     pub fn add_plugin<P>(
         &mut self,
         plugin: P,
-    ) -> &mut Self
+    ) -> Result<&mut Self>
     where
         P: Plugin + Clone + 'static,
     {
-        self.plugins.push(Box::new(plugin.clone()));
+        if self.plugins.iter().any(|p| p.type_id == std::any::TypeId::of::<P>()) {
+            // TODO: use a better error type
+            return Err(Error::UnknownError); 
+        }
+
+        self.plugins.push(RegisteredPlugin {
+            plugin: Box::new(plugin.clone()),
+            type_id: std::any::TypeId::of::<P>()
+        });
         plugin.build(self);
 
-        self
+        Ok(self)
     }
 
     /// Registers a new command with the context.
@@ -244,6 +252,11 @@ impl Default for Context {
     }
 }
 
+pub struct RegisteredPlugin {
+    plugin: Box<dyn Plugin>,
+    type_id: TypeId
+}
+
 /// The result of running a successful command.
 /// Optionally contains a text response to
 /// be displayed.
@@ -360,7 +373,11 @@ mod test {
         let mut context = Context::new();
         context.add_plugin::<TestPlugin>(
             TestPlugin::default(),
-        );
+        )?;
+
+        // adding the same plugin again should result in an error
+        assert!(context.add_plugin(TestPlugin::default()).is_err());
+        
         context.in_memory_db(true);
         assert_eq!(context.commands.len(), 2);
         context.startup()?;

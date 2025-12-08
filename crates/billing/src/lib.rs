@@ -443,9 +443,9 @@ mod test {
     fn invoice_generate_test() -> Result<()> {
         let mut context = Context::new();
         context
-            .add_plugin(DbPlugin)
-            .add_plugin(InvoicePlugin)
-            .add_plugin(TrainingPlugin);
+            .add_plugin(DbPlugin)?
+            .add_plugin(InvoicePlugin)?
+            .add_plugin(TrainingPlugin)?;
         context.in_memory_db(true);
 
         context.startup()?;
@@ -540,9 +540,9 @@ mod test {
     fn test_billing_commands() -> Result<()> {
         let mut context = Context::new();
         context
-            .add_plugin(DbPlugin)
-            .add_plugin(InvoicePlugin)
-            .add_plugin(TrainingPlugin);
+            .add_plugin(DbPlugin)?
+            .add_plugin(InvoicePlugin)?
+            .add_plugin(TrainingPlugin)?;
         context.in_memory_db(true);
 
         context.startup()?;
