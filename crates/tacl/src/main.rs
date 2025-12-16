@@ -24,7 +24,7 @@ fn main() -> Result<()> {
         std::env::args().collect::<Vec<_>>();
 
     // remove the initial executable name from args
-    // todo: this isn't guaranteed to be the executable name, should probably check it's what we expect
+    // TODO: this isn't guaranteed to be the executable name, should probably check it's what we expect
     command_args.remove(0);
 
     let response = context

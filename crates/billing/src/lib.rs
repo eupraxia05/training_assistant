@@ -243,6 +243,14 @@ fn generate_latex(
         package: "geometry".into(),
         argument: Some("margin=0.5in".into()),
     });
+    doc.preamble.push(PreambleElement::UsePackage {
+        package: "quattrocento".into(),
+        argument: Some("sfdefault".into()),
+    });
+    doc.preamble.push(PreambleElement::UsePackage {
+        package: "fontenc".into(),
+        argument: Some("T1".into()),
+    });
     doc.preamble.push(NewCommand(
         "companyname".into(),
         trainer.company_name().clone(),
