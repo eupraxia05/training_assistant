@@ -10,6 +10,7 @@ use ratatui::{
 };
 use crossterm::event::{KeyModifiers, KeyCode};
 use tabled::{builder::Builder as TabledBuilder};
+use gui::prelude::*;
 
 ///////////////////////////////////////////////////////////////////////////////
 // PUBLIC API
@@ -127,8 +128,11 @@ impl Plugin for DbCommandsPlugin {
                 process_db_command
             )?;
 
-        context.get_resource_mut::<TuiNewTabTypes>().unwrap().register_new_tab_type::<DbInfoTabImpl>("Database Info");
-        context.get_resource_mut::<TuiNewTabTypes>().unwrap().register_new_tab_type::<EditTabImpl>("Edit Table");
+        if context.has_resource::<TuiNewTabTypes>() {
+            context.get_resource_mut::<TuiNewTabTypes>().unwrap().register_new_tab_type::<DbInfoTabImpl>("Database Info");
+            context.get_resource_mut::<TuiNewTabTypes>().unwrap().register_new_tab_type::<EditTabImpl>("Edit Table");
+        }
+        context.add_new_window_type::<TableEditorWindow>("Table Editor");
         Ok(())
     }
 }
@@ -445,3 +449,5 @@ impl TabImpl for EditTabImpl {
         }
     }
 }
+
+struct TableEditorWindow;

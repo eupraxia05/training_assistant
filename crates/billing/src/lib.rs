@@ -17,6 +17,7 @@ use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::widgets::{Block, Paragraph, Widget};
 use ratatui::text::Line;
+use gui::prelude::*;
 
 ///////////////////////////////////////////////////////////////////////////////
 // PUBLIC API
@@ -110,9 +111,13 @@ impl Plugin for InvoicePlugin {
             new_tab_types.register_new_tab_type::<ExportInvoiceTabImpl>("Export Invoice");
         }
 
+        context.add_new_window_type::<InvoiceExportWindow>("Export Invoice");
+
         Ok(())
     }
 }
+
+struct InvoiceExportWindow;
 
 /// Processes the `generate` subcommand of the `invoice` command.
 fn process_invoice_generate_command(
@@ -446,6 +451,8 @@ mod test {
             format!("{}", charge.0),
         )?;
 
+        
+
         Ok(invoice)
     }
 
@@ -471,59 +478,7 @@ mod test {
 
         let rendered = latex::print(&latex).unwrap();
 
-        assert_eq!(
-            rendered,
-            "\\documentclass{article}\n\
-            \\usepackage{hhline}\n\
-            \\usepackage[margin=0.5in]{geometry}\n\
-            \\newcommand{\\companyname}{Tara Fitness}\n\
-            \\newcommand{\\companyaddress}\
-                {2127 Xanthia St, Denver, CO 80220}\n\
-            \\newcommand{\\companyemail}{tara@gmail.com}\n\
-            \\newcommand{\\companyphone}{(303) 175-3098}\n\
-            \\newcommand{\\clientname}{Clarissa Client}\n\
-            \\newcommand{\\invoicenumber}{2025-0532}\n\
-            \\newcommand{\\paymentdue}{11/06/2025}\n\
-            \\newcommand{\\paymentmade}{11/07/2025}\n\
-            \\newcommand{\\paidvia}{Cash}\n\
-            \\newcommand{\\chargedate}{11/05/2025}\n\
-            \\newcommand{\\chargedescription}\
-                {Personal training session (60 min)}\n\
-            \\newcommand{\\chargeamount}{50}\n\
-            \\begin{document}\n\
-            \\begin{center}\n\
-            \t{\\Large\\bfseries \\companyname}\\\\\n\
-            \t{\\companyaddress}\\\\\n\
-            \tEmail: \\companyemail \\hspace{1cm} Phone \\companyphone\n\
-            \\end{center}\n\n\
-            \\vspace{0.5cm}\n\
-            \\hrule\n\\vspace{0.5cm}\n\n\
-            \\noindent{\\textbf{Invoice Number:} \\invoicenumber} \\\\\n\
-            \\noindent{\\textbf{Client Name:} \\clientname} \\\\\n\
-            \\noindent{\\textbf{Payment Due:} \\paymentdue} \\\\\n\
-            \\noindent{\\textbf{Payment Made:} \\paymentmade} \\\\\n\
-            \\noindent{\\textbf{Paid Via:} \\paidvia} \\\\\n\n\
-            \\vspace{0.5cm}\n\
-            \\begin{center}\n\
-            \\begin{tabular}{|p{2.0cm}|p{8.0cm}|p{2.5cm}|}\n\
-            \t\\hline\n\
-            \t\\textbf{Date} & \\textbf{Description} \
-                & \\textbf{Amount (\\$)} \\\\\n\
-            \t\\hline\n\
-            \t\\chargedate & \\chargedescription & \\chargeamount \\\\\n\
-            \t\\hhline{|=|=|=|}\n\
-            \t\\multicolumn{2}{|l|}{\\textbf{Total}} & \\textbf{100} \\\\\n\
-            \t\\hline\n\
-            \\end{tabular}\n\
-            \\end{center}\n\n\
-            \\vspace{0.5cm}\n\n\
-            \\noindent{\\textit{Payment due at time of service. Refunds only \
-                available for sessions cancelled at least \
-                24 hours in advance.}\n\n\
-            \\vspace{0.5cm}\n\n\
-            \\noindent{\\textit{Thanks for training with me!}}\n\n\
-            \\end{document}\n"
-        );
+        insta::assert_snapshot!(rendered);
 
         let out_path = std::env::temp_dir()
             .join("training_assistant_test");

@@ -1,0 +1,60 @@
+---
+source: crates/billing/src/lib.rs
+expression: rendered
+---
+\documentclass{article}
+\usepackage{hhline}
+\usepackage[margin=0.5in]{geometry}
+\usepackage[sfdefault]{quattrocento}
+\usepackage[T1]{fontenc}
+\newcommand{\companyname}{Tara Fitness}
+\newcommand{\companyaddress}{2127 Xanthia St, Denver, CO 80220}
+\newcommand{\companyemail}{tara@gmail.com}
+\newcommand{\companyphone}{(303) 175-3098}
+\newcommand{\clientname}{Clarissa Client}
+\newcommand{\invoicenumber}{2025-0532}
+\newcommand{\paymentdue}{11/06/2025}
+\newcommand{\paymentmade}{11/07/2025}
+\newcommand{\paidvia}{Cash}
+\newcommand{\chargedate}{11/05/2025}
+\newcommand{\chargedescription}{Personal training session (60 min)}
+\newcommand{\chargeamount}{50}
+\begin{document}
+\begin{center}
+	{\Large\bfseries \companyname}\\
+	{\companyaddress}\\
+	Email: \companyemail \hspace{1cm} Phone \companyphone
+\end{center}
+
+\vspace{0.5cm}
+\hrule
+\vspace{0.5cm}
+
+\noindent{\textbf{Invoice Number:} \invoicenumber} \\
+\noindent{\textbf{Client Name:} \clientname} \\
+\noindent{\textbf{Payment Due:} \paymentdue} \\
+\noindent{\textbf{Payment Made:} \paymentmade} \\
+\noindent{\textbf{Paid Via:} \paidvia} \\
+
+\vspace{0.5cm}
+\begin{center}
+\begin{tabular}{|p{2.0cm}|p{8.0cm}|p{2.5cm}|}
+	\hline
+	\textbf{Date} & \textbf{Description} & \textbf{Amount (\$)} \\
+	\hline
+	\chargedate & \chargedescription & \chargeamount \\
+	\hhline{|=|=|=|}
+	\multicolumn{2}{|l|}{\textbf{Total}} & \textbf{100} \\
+	\hline
+\end{tabular}
+\end{center}
+
+\vspace{0.5cm}
+
+\noindent{\textit{Payment due at time of service. Refunds only available for sessions cancelled at least 24 hours in advance.}
+
+\vspace{0.5cm}
+
+\noindent{\textit{Thanks for training with me!}}
+
+\end{document}
