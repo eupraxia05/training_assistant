@@ -23,6 +23,7 @@ impl Plugin for TuiPlugin {
                 .about("Opens an empty TUI session."),
             process_tui_command
         )?;
+        context.get_resource_mut::<TuiNewTabTypes>().unwrap().register_new_tab_type::<AboutTabImpl>("About Training Assistant");
         Ok(())
     }
 }
@@ -580,6 +581,29 @@ impl Resource for EmptyTabState {
 
     fn as_any_mut(&mut self) -> &mut dyn Any {
         self
+    }
+}
+
+struct AboutTabImpl;
+
+#[derive(Default)]
+struct AboutTabState;
+
+impl TabImpl for AboutTabImpl {
+    type State = AboutTabState;
+
+    fn title() -> String { "ℹ️ About".into() }
+
+    fn render(_: &mut Context, buffer: &mut Buffer, rect: Rect, block: Block, tab_id: usize) {
+       Paragraph::new("Training Assistant v0.0\nDeveloped by Grey Fitness").block(block).render(rect, buffer); 
+    }
+
+    fn keybinds() -> Vec<KeyBind> {
+        Vec::new()
+    }
+
+    fn handle_key(_: &mut Context, bind: &str, tab_id: usize) {
+
     }
 }
 
