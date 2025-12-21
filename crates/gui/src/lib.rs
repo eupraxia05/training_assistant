@@ -2,6 +2,7 @@
 use framework::prelude::*;
 use std::any::Any;
 
+/// A plugin for GUI utilities.
 #[derive(Clone)]
 pub struct GuiPlugin;
 
@@ -14,16 +15,22 @@ impl Plugin for GuiPlugin {
     }
 }
 
+/// A resource that stores the window types that can be created in
+/// the Window menu.
 #[derive(Default)]
 pub struct GuiNewWindowTypes {
     types: Vec<GuiNewWindowType>
 }
 
+/// Stores information about a single window creatable in the
+/// Window menu. Collected in `GuiNewWindowTypes`.
 pub struct GuiNewWindowType {
     name: String
 }
 
+/// An extension trait adding GUI-related functionality to `Context`.
 pub trait GuiContextExt {
+    /// Adds a window type (`T`) creatable in the Window menu.
     fn add_new_window_type<T>(&mut self, name: impl Into<String>);
 }
 
@@ -51,28 +58,28 @@ impl Resource for GuiNewWindowTypes {
     }
 }
 
+/// Runs the UI for the menu bar.
 pub fn menu_ui(context: &mut Context, egui_ctx: &egui::Context) {
     egui::TopBottomPanel::top("menu_panel").show(egui_ctx, |ui| {
         egui::MenuBar::new().ui(ui, |ui| {
             ui.menu_button("File", |ui| {
-                ui.button("Quit");
+                let _ = ui.button("Quit");
             });
             ui.menu_button("Window", |ui| {
                 if let Some(new_window_types) = context.get_resource::<GuiNewWindowTypes>() {
                     for t in &new_window_types.types {
-                        ui.button(t.name.clone());    
+                        let _ = ui.button(t.name.clone());    
                     }
                 }
             });
             ui.menu_button("Help", |ui| {
-                ui.button("About Training Assistant...");
+                let _ = ui.button("About Training Assistant...");
             });
         });
     });
 }
 
-struct AboutWindow;
-
+/// Re-exports for common symbols in the `gui` crate.
 pub mod prelude {
     pub use crate::{
         GuiPlugin,

@@ -594,7 +594,7 @@ impl TabImpl for AboutTabImpl {
 
     fn title() -> String { "ℹ️ About".into() }
 
-    fn render(_: &mut Context, buffer: &mut Buffer, rect: Rect, block: Block, tab_id: usize) {
+    fn render(_: &mut Context, buffer: &mut Buffer, rect: Rect, block: Block, _tab_id: usize) {
        Paragraph::new("Training Assistant v0.0\nDeveloped by Grey Fitness").block(block).render(rect, buffer); 
     }
 
@@ -602,7 +602,7 @@ impl TabImpl for AboutTabImpl {
         Vec::new()
     }
 
-    fn handle_key(_: &mut Context, bind: &str, tab_id: usize) {
+    fn handle_key(_: &mut Context, _bind: &str, _tab_id: usize) {
 
     }
 }

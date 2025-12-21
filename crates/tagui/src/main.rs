@@ -5,7 +5,7 @@ use gui::prelude::*;
 use db_commands::DbCommandsPlugin;
 use billing::InvoicePlugin;
 
-fn main() -> eframe::Result {
+fn main() -> Result<()> {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([320.0, 240.0]),
@@ -13,12 +13,12 @@ fn main() -> eframe::Result {
     };
 
     let mut context = Context::new();
-    context.add_plugin(DbPlugin);
-    context.add_plugin(DbCommandsPlugin);
-    context.add_plugin(GuiPlugin);
-    context.add_plugin(InvoicePlugin);
+    context.add_plugin(DbPlugin)?;
+    context.add_plugin(DbCommandsPlugin)?;
+    context.add_plugin(GuiPlugin)?;
+    context.add_plugin(InvoicePlugin)?;
 
-    context.startup();
+    context.startup()?;
 
     eframe::run_simple_native(
         "Training Assistant",
@@ -34,7 +34,9 @@ fn main() -> eframe::Result {
                 },
             );
         },
-    )
+    ).expect("failed to run eframe app");
+
+    Ok(())
 }
 
 fn build_ui(context: &mut Context, egui_ctx: &egui::Context) {
