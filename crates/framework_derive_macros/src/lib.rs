@@ -9,7 +9,7 @@ use venial::{Fields, TypeExpr};
 /// Automatically implements the TableRow trait for
 /// a given type, allowing a table to be created
 /// from the type using `Context::add_table`.
-#[proc_macro_derive(TableRow)]
+#[proc_macro_derive(TableRow, attributes(display_table))]
 pub fn derive_row(item: TokenStream) -> TokenStream {
     // parse the struct this derive macro was invoked
     // on (and panic if it's not a struct)
@@ -212,8 +212,78 @@ fn generate_get_fields_as_strings_fn_definition(fields: &venial::NamedFields) ->
     let mut get_fields_as_strings = proc_macro2::TokenStream::new();
 
     for (field, _) in fields.fields.iter() {
-        let get_field = format!("result.push(format!(\"{{:?}}\", {}::from_table_field(db_connection, table_name.clone(), row_id, \"{}\".into()).unwrap_or_default()));", type_expr_to_type_str(&field.ty), field.name.to_string());
-        get_fields_as_strings.extend(get_field.parse::<proc_macro2::TokenStream>());
+        /*if crate::type_expr_to_type_str(field.ty) == "RowId" {
+
+            let display_table_attr = field.attributes.iter().find(|a| { 
+                if let Some(p) = a.get_single_path_segment() {
+                    if p == "display_table" {
+                        return true
+                    }
+                }
+                false
+            });
+            
+            if let Some(display_table_attr) = display_table_attr {
+                let value_tokens = display_table_attr.value.get_value_tokens();
+                assert_eq!(value_tokens.len(), 3);
+                let display_table = match &value_tokens[0] {
+                    proc_macro2::TokenTree::Literal(l) => { l.to_string() }
+                    _ => { panic!("display_table values must be string literals") }
+                };
+                let display_column = match &value_tokens[2] {
+                    proc_macro2::TokenTree::Literal(l) => { }
+                    _ => { panic!("display_table values must be string literals") }
+                };
+
+                // {
+                //   let rid = RowId::from_table_field(db_connection, display_table, row_id, field.name.to_string()
+                // }
+            }
+        }*/
+
+        let field_name = field.name.to_string();
+        let field_type = field.ty.clone();
+        let field_attributes = field.attributes.clone();
+
+        let mut display_table = None;
+        for attribute in &field.attributes {
+            if let Some(segment) = attribute.get_single_path_segment() {
+                if segment == "display_table" {
+                    let value_tokens = attribute.value.get_value_tokens();
+                    if value_tokens.len() == 3 {
+                        display_table = Some((value_tokens[0].to_string(), value_tokens[2].to_string()));
+                    }
+                }
+            }
+        }
+
+        let display_table_tokens = if let Some(display_table) = display_table {
+            let mut table = display_table.0;
+            table.pop();
+            table.remove(0);
+            let mut column = display_table.1;
+            column.pop();
+            column.remove(0);
+            quote::quote!{ display_table: Some((#table.into(), #column.into())) } 
+        } else {
+            quote::quote!{ display_table: None }
+        };
+
+        // TODO: get rid of the unwrap
+        let get_field = quote::quote!{
+            {
+                let table_field = <#field_type>::from_table_field(db_connection, table_name.clone(), row_id, #field_name.into()).unwrap();
+                let display_str_args = framework::db::TableFieldDisplayStringArgs {
+                    db_connection,
+                    #display_table_tokens 
+                };
+                let display_str = <#field_type>::to_display_string(&table_field, display_str_args);        
+                result.push(display_str);
+            }
+        };
+
+        /*let get_field = format!("result.push(format!(\"{{:?}}\", {}::from_table_field(db_connection, table_name.clone(), row_id, \"{}\".into()).unwrap_or_default()));", type_expr_to_type_str(&field.ty), field.name.to_string());*/
+        get_fields_as_strings.extend(get_field);
     }
 
     quote::quote!(

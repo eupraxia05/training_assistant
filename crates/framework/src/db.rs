@@ -309,6 +309,13 @@ pub trait TableField {
     ) -> Result<Self>
     where
         Self: Sized;
+
+    fn to_display_string(&self, args: TableFieldDisplayStringArgs) -> String;
+}
+
+pub struct TableFieldDisplayStringArgs<'a> {
+    pub db_connection: &'a DbConnection,
+    pub display_table: Option<(String, String)>
 }
 
 /// A configuration for a SQL table. Used when opening a
@@ -558,6 +565,10 @@ impl TableField for String {
             table_name, row_id, field_name,
         )
     }
+
+    fn to_display_string(&self, _: TableFieldDisplayStringArgs) -> String {
+        format!("{:?}", self)
+    }
 }
 
 impl TableField for i32 {
@@ -574,6 +585,9 @@ impl TableField for i32 {
             table_name, row_id, field_name,
         )
     }
+    fn to_display_string(&self, _: TableFieldDisplayStringArgs) -> String {
+        format!("{:?}", self)
+    }
 }
 
 impl TableField for i64 {
@@ -589,6 +603,9 @@ impl TableField for i64 {
         db_connection.get_field_in_table_row::<i64>(
             table_name, row_id, field_name,
         )
+    }
+    fn to_display_string(&self, _: TableFieldDisplayStringArgs) -> String {
+        format!("{:?}", self)
     }
 }
 
@@ -608,6 +625,18 @@ impl TableField for RowId {
                     table_name, row_id, field_name,
                 )?,
         ))
+    }
+    fn to_display_string(&self, args: TableFieldDisplayStringArgs) -> String {
+        if let Some(display_table) = args.display_table {
+            let display_data = args.db_connection.get_field_in_table_row::<String>(display_table.0.clone(), *self, display_table.1.clone());
+            if let Ok(data) = display_data {
+                data
+            } else { 
+                format!("invalid row {}, column {:?} in table {:?}", self.0, display_table.1, display_table.0)
+            }
+        } else {
+            format!("{:?}", self)
+        }
     }
 }
 
@@ -632,12 +661,76 @@ impl TableField for Vec<RowId> {
         }
         Ok(vec)
     }
+    fn to_display_string(&self, _: TableFieldDisplayStringArgs) -> String {
+        format!("{:?}", self)
+    }
+}
+
+impl TableField for chrono::NaiveDate {
+    fn sql_type() -> &'static str {
+        "TEXT"
+    }
+    fn from_table_field(
+        db_connection: &DbConnection,
+        table_name: String,
+        row_id: RowId,
+        field_name: String,
+    ) -> Result<Self> {
+        let s = db_connection.get_field_in_table_row::<String>(
+            table_name, row_id, field_name,
+        )?;
+        if let Ok(date) = s.parse::<chrono::NaiveDate>() {
+            Ok(date)
+        } else {
+            // TODO: fix error type
+            Err(Error::UnknownError)
+        }
+    }
+    fn to_display_string(&self, args: TableFieldDisplayStringArgs) -> String {
+        format!("{:?}", self)
+    }
+}
+
+impl<T> TableField for Option<T>
+    where T: FromSql + std::fmt::Debug
+{
+    fn sql_type() -> &'static str {
+        "TEXT"
+    }
+
+    fn from_table_field(
+        db_connection: &DbConnection,
+        table_name: String,
+        row_id: RowId,
+        field_name: String,
+    ) -> Result<Self> {
+        let s = db_connection.get_field_in_table_row::<T>(table_name, row_id, field_name);
+        if let Ok(v) = s {
+            Ok(Some(v))
+        } else {
+            Ok(None)
+        }
+    }
+    fn to_display_string(&self, args: TableFieldDisplayStringArgs) -> String {
+        format!("{:?}", self)
+    }
+}
+
+impl FromSql for RowId {
+    fn column_result(value: rusqlite::types::ValueRef) -> rusqlite::types::FromSqlResult<Self> {
+        if value.data_type() == rusqlite::types::Type::Integer {
+            Ok(RowId(value.as_i64().unwrap()))
+        } else {
+            Err(rusqlite::types::FromSqlError::InvalidType)
+        }
+    }
 }
 
 #[cfg(test)]
 mod test {
     use crate::prelude::*;
     use framework_derive_macros::TableRow;
+    extern crate self as framework;
 
     #[derive(Clone)]
     struct TestPlugin;

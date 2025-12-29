@@ -3,6 +3,7 @@
 use framework::prelude::*;
 use framework_derive_macros::TableRow;
 use tui::prelude::*;
+use chrono::NaiveDate;
 
 /// The plugin for the Training system. 
 /// Add this to set up the required tables and commands.
@@ -13,7 +14,8 @@ impl Plugin for TrainingPlugin {
     fn build(self, context: &mut Context) -> Result<()> {
         context.add_table(TableConfig::new::<Trainer>("trainer"))
             .add_table(TableConfig::new::<Client>("client"))
-            .add_table(TableConfig::new::<Exercise>("exercise"));
+            .add_table(TableConfig::new::<Exercise>("exercise"))
+            .add_table(TableConfig::new::<Session>("session"));
        
         // TODO: conditionally compile this
         if let Some(new_tab_types) = context.get_resource_mut::<TuiNewTabTypes>() {
@@ -104,3 +106,14 @@ impl TabImpl for ScheduleTabImpl {
 
     }
 }
+
+#[derive(TableRow, Debug)]
+pub struct Session {
+    date: NaiveDate,
+    #[display_table("trainer", "name")]
+    trainer: RowId,
+    #[display_table("client", "name")]
+    client: RowId,
+    charge: Option<RowId>,
+}
+
