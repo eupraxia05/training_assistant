@@ -67,7 +67,7 @@ impl DbConnection {
         // we intend to consume the connection
         let Some(connection) = self.connection.take()
         else {
-            return Err(Error::NoConnectionError);
+            return Err(Error::new("no active db connection"));
         };
 
         // close the connection
@@ -77,7 +77,7 @@ impl DbConnection {
         if let Some(db_path) = &self.db_path {
             std::fs::remove_file(db_path.clone())
                 .map_err(|e| {
-                    Error::FileError(e.to_string())
+                    Error::new(format!("couldn't erase db file: {}", e.to_string()))
                 })?;
             self.db_path = None;
         }
@@ -199,7 +199,7 @@ impl DbConnection {
         select
             .query_one([row_id.0], |t| t.get(0))
             .map_err(|e| {
-                Error::DatabaseError(e.to_string())
+                Error::new(e.to_string())
             })
     }
 
@@ -310,11 +310,18 @@ pub trait TableField {
     where
         Self: Sized;
 
+    /// Formats a display string (for use in table output) from this field.
+    ///
+    /// * `args` - A struct of arguments used to format the display string.
     fn to_display_string(&self, args: TableFieldDisplayStringArgs) -> String;
 }
 
+/// Arguments for `TableField::to_display_string`.
 pub struct TableFieldDisplayStringArgs<'a> {
+    /// A connection to the database.
     pub db_connection: &'a DbConnection,
+    
+    /// If applicable, a table and column to show for a RowId, instead of its numeric id.
     pub display_table: Option<(String, String)>
 }
 
@@ -412,6 +419,9 @@ impl DbTableConfigs {
 
 /// An extension to `Context` to add database functionality acessible directly from the context.
 pub trait DbContextExt {
+    /// Gets the database connection from a `Context`, if it is active. Returns `Err` if not.
+    fn db_connection(&mut self) -> Result<&mut DbConnection>;
+
     /// Adds a new table configuration. Must be called before `Context::startup`.
     ///
     /// * `table` - The table configuration to add.
@@ -419,6 +429,10 @@ pub trait DbContextExt {
 }
 
 impl DbContextExt for Context {
+    fn db_connection(&mut self) -> Result<&mut DbConnection> {
+        self.get_resource_mut::<DbConnection>().ok_or(Error::new("no active db connection"))
+    }
+
     fn add_table(&mut self, table: TableConfig) -> &mut Context {
         if !self.has_resource::<DbTableConfigs>() {
             let mut configs = DbTableConfigs::default();
@@ -474,8 +488,8 @@ impl DbConnection {
             "training_assistant",
         )
         // translate to an error if it failed
-        .ok_or(Error::FileError(
-            "Failed to get data directory".into(),
+        .ok_or(Error::new(
+            "Failed to get data directory",
         ))?;
 
         Ok(dirs.data_dir().join("data/data.db"))
@@ -546,7 +560,7 @@ impl DbConnection {
         if let Some(connection) = &self.connection {
             Ok(connection)
         } else {
-            Err(Error::NoConnectionError)
+            Err(Error::new("no active db connection"))
         }
     }
 }
@@ -682,11 +696,10 @@ impl TableField for chrono::NaiveDate {
         if let Ok(date) = s.parse::<chrono::NaiveDate>() {
             Ok(date)
         } else {
-            // TODO: fix error type
-            Err(Error::UnknownError)
+            Err(Error::new("failed to parse date"))
         }
     }
-    fn to_display_string(&self, args: TableFieldDisplayStringArgs) -> String {
+    fn to_display_string(&self, _: TableFieldDisplayStringArgs) -> String {
         format!("{:?}", self)
     }
 }
@@ -711,7 +724,7 @@ impl<T> TableField for Option<T>
             Ok(None)
         }
     }
-    fn to_display_string(&self, args: TableFieldDisplayStringArgs) -> String {
+    fn to_display_string(&self, _: TableFieldDisplayStringArgs) -> String {
         format!("{:?}", self)
     }
 }
@@ -758,7 +771,7 @@ mod test {
 
         // open the db connection
         let mut db_connection =
-            context.get_resource_mut::<DbConnection>().ok_or(Error::NoConnectionError)?;
+            context.db_connection()?;
 
         // check the db connection is open
         assert!(db_connection.is_open());

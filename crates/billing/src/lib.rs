@@ -153,7 +153,7 @@ fn process_invoice_command(
 ) -> Result<CommandResponse> {
     // get the database connection
     let db_connection =
-        context.get_resource_mut::<DbConnection>().ok_or(Error::NoConnectionError)?;
+        context.db_connection()?;
 
     // check for the generate subcommand and run it if desired
     if let Some(("generate", sub_m)) =
@@ -165,9 +165,7 @@ fn process_invoice_command(
         );
     }
 
-    // TODO: this isn't an unknown error, this should be a
-    // "subcommand not recognized" error
-    Err(Error::UnknownError)
+    Err(Error::new(format!("subcommand not recognized")))
 }
 
 /// A LaTeX preamble element to create a new command. This is used to pass
@@ -466,7 +464,7 @@ mod test {
         context.in_memory_db(true);
 
         context.startup()?;
-        let db_connection = context.get_resource_mut::<DbConnection>().ok_or(Error::NoConnectionError)?;
+        let db_connection = context.db_connection()?;
 
         let invoice =
             setup_invoice_data(db_connection)?;
@@ -512,7 +510,7 @@ mod test {
 
         context.startup()?;
 
-        let db_connection = context.get_resource_mut::<DbConnection>().ok_or(Error::NoConnectionError)?;
+        let db_connection = context.db_connection()?;
 
         let invoice =
             setup_invoice_data(db_connection)?;

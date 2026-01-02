@@ -42,7 +42,7 @@ use std::any::{Any, TypeId};
 /// # context.in_memory_db(true);
 /// context.add_plugin(MyPlugin);
 /// context.startup()?;
-/// let db_connection = context.get_resource_mut::<DbConnection>().ok_or(Error::NoConnectionError)?;
+/// let db_connection = context.db_connection()?;
 /// # Ok(())
 /// # }
 /// ```
@@ -86,7 +86,7 @@ impl Context {
     {
         if self.plugins.iter().any(|p| p.type_id == std::any::TypeId::of::<P>()) {
             // TODO: output the plugin name
-            return Err(Error::CustomError("Tried to add a plugin twice!".into())); 
+            return Err(Error::new("Tried to add a plugin twice!")); 
         }
 
         self.plugins.push(RegisteredPlugin {
@@ -110,7 +110,7 @@ impl Context {
     ) -> Result<&mut Self> {
         if self.commands.iter().any(|c| c.0.get_name() == command.get_name()) {
             // TODO: output the command name
-            return Err(Error::CustomError("Tried to add a command that already has been added!".into()));
+            return Err(Error::new("Tried to add a command that already has been added!"));
         }
         self.commands
             .push((command, process_command_fn));
@@ -244,7 +244,9 @@ impl Context {
                 }
             }
         }
-        Err(Error::UnknownError)
+
+        // TODO: write a proper error message
+        Err(Error::default())
     }
 }
 

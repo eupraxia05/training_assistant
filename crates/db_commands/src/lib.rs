@@ -141,7 +141,7 @@ fn process_new_command(
     context: &mut Context,
     arg_matches: &ArgMatches, 
 ) -> Result<CommandResponse> {
-    let db_connection = context.get_resource_mut::<DbConnection>().ok_or(Error::NoConnectionError)?;
+    let db_connection = context.db_connection()?;
     let table: &String = arg_matches
         .get_one::<String>("table")
         .expect("Missing required argument");
@@ -158,7 +158,7 @@ fn process_set_command(
     context: &mut Context,
     arg_matches: &ArgMatches,
 ) -> Result<CommandResponse> {
-    let db_connection = context.get_resource_mut::<DbConnection>().ok_or(Error::NoConnectionError)?;
+    let db_connection = context.db_connection()?;
     let table = arg_matches
         .get_one::<String>("table")
         .expect("Missing required argument");
@@ -189,7 +189,7 @@ fn process_list_command(
     context: &mut Context,
     arg_matches: &ArgMatches,
 ) -> Result<CommandResponse> {
-    let db_connection = context.get_resource_mut::<DbConnection>().ok_or(Error::NoConnectionError)?;
+    let db_connection = context.db_connection()?;
     let table = arg_matches
         .get_one::<String>("table")
         .expect("Missing required argument");
@@ -202,7 +202,7 @@ fn process_list_command(
         format!("No entries in table {}.", table)
     } else {
         let Some(table_config) = db_connection.tables().iter().find(|t| t.table_name == *table) else {
-            return Err(Error::UnknownError);
+            return Err(Error::new(format!("table does not exist: {}", table)));
         };
 
         let mut tabled_builder = TabledBuilder::default();
@@ -219,7 +219,7 @@ fn process_remove_command(
     context: &mut Context,
     arg_matches: &ArgMatches,
 ) -> Result<CommandResponse> {
-    let db_connection = context.get_resource_mut::<DbConnection>().ok_or(Error::NoConnectionError)?;
+    let db_connection = context.db_connection()?;
     let table = arg_matches
         .get_one::<String>("table")
         .expect("Missing required argument");
@@ -243,11 +243,11 @@ fn process_db_command(
 ) -> Result<CommandResponse> {
     match matches.subcommand() {
         Some(("info", _)) => {
-            let db_connection = context.get_resource_mut::<DbConnection>().ok_or(Error::NoConnectionError)?;
+            let db_connection = context.db_connection()?;
             process_db_info_command(db_connection)
         }
         Some(("erase", _)) => {
-            let db_connection = context.get_resource_mut::<DbConnection>().ok_or(Error::NoConnectionError)?;
+            let db_connection = context.db_connection()?;
             erase_db(db_connection)
         }
         Some(("backup", _)) => {
