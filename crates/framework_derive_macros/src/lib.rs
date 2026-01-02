@@ -214,7 +214,6 @@ fn generate_get_fields_as_strings_fn_definition(fields: &venial::NamedFields) ->
     for (field, _) in fields.fields.iter() {
         let field_name = field.name.to_string();
         let field_type = field.ty.clone();
-        let field_attributes = field.attributes.clone();
 
         let mut display_table = None;
         for attribute in &field.attributes {

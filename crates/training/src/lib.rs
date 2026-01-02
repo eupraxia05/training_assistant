@@ -107,6 +107,7 @@ impl TabImpl for ScheduleTabImpl {
     }
 }
 
+/// Represents a scheduled training session.
 #[derive(TableRow, Debug)]
 pub struct Session {
     date: NaiveDate,

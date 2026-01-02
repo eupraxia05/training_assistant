@@ -46,9 +46,6 @@ use std::any::{Any, TypeId};
 /// # Ok(())
 /// # }
 /// ```
-// TODO: the add-plugins -> setup -> get connection pattern
-// seems error prone. Probably better to split the first
-// step into a builder.
 pub struct Context {
     /// The `Plugin`s registered with this `Context`.
     /// Add one with `Context::add_plugin`.
