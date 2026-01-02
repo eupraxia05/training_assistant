@@ -212,35 +212,6 @@ fn generate_get_fields_as_strings_fn_definition(fields: &venial::NamedFields) ->
     let mut get_fields_as_strings = proc_macro2::TokenStream::new();
 
     for (field, _) in fields.fields.iter() {
-        /*if crate::type_expr_to_type_str(field.ty) == "RowId" {
-
-            let display_table_attr = field.attributes.iter().find(|a| { 
-                if let Some(p) = a.get_single_path_segment() {
-                    if p == "display_table" {
-                        return true
-                    }
-                }
-                false
-            });
-            
-            if let Some(display_table_attr) = display_table_attr {
-                let value_tokens = display_table_attr.value.get_value_tokens();
-                assert_eq!(value_tokens.len(), 3);
-                let display_table = match &value_tokens[0] {
-                    proc_macro2::TokenTree::Literal(l) => { l.to_string() }
-                    _ => { panic!("display_table values must be string literals") }
-                };
-                let display_column = match &value_tokens[2] {
-                    proc_macro2::TokenTree::Literal(l) => { }
-                    _ => { panic!("display_table values must be string literals") }
-                };
-
-                // {
-                //   let rid = RowId::from_table_field(db_connection, display_table, row_id, field.name.to_string()
-                // }
-            }
-        }*/
-
         let field_name = field.name.to_string();
         let field_type = field.ty.clone();
         let field_attributes = field.attributes.clone();
@@ -282,7 +253,6 @@ fn generate_get_fields_as_strings_fn_definition(fields: &venial::NamedFields) ->
             }
         };
 
-        /*let get_field = format!("result.push(format!(\"{{:?}}\", {}::from_table_field(db_connection, table_name.clone(), row_id, \"{}\".into()).unwrap_or_default()));", type_expr_to_type_str(&field.ty), field.name.to_string());*/
         get_fields_as_strings.extend(get_field);
     }
 
