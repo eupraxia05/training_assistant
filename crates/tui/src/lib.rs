@@ -149,7 +149,7 @@ impl<T> TabState<T>
     /// Returns `None` if the tab ID doesn't have a registered state of this type.
     ///
     /// * `tab_id` - The tab ID to get the state for.
-    pub fn get_state(&mut self, tab_id: usize) -> Option<&T> {
+    pub fn get_state(&self, tab_id: usize) -> Option<&T> {
         self.states.get(&tab_id)
     }
 }
@@ -607,10 +607,47 @@ impl TabImpl for AboutTabImpl {
     }
 }
 
+pub trait TuiContextExt {
+    fn tab_state<S>(&self, tab_idx: usize) -> Result<&S>
+        where S: Default + 'static;
+    fn tab_state_mut<S>(&mut self, tab_idx: usize) -> Result<&mut S>
+        where S: Default + 'static;
+}
+
+impl TuiContextExt for Context {
+    fn tab_state<S>(&self, tab_idx: usize) -> Result<&S> 
+        where S: Default + 'static
+    {
+        if let Some(tab_states) = self.get_resource::<TabState<S>>() {
+            if let Some(tab_state) = tab_states.get_state(tab_idx) {
+                Ok(tab_state)
+            } else {
+                Err(Error::new("tab state not found for tab"))
+            }
+        } else {
+            Err(Error::new("tab state not found for type"))
+        }
+    }
+    
+    fn tab_state_mut<S>(&mut self, tab_idx: usize) -> Result<&mut S> 
+        where S: Default + 'static
+    {
+        if let Some(tab_states) = self.get_resource_mut::<TabState<S>>() {
+            if let Some(tab_state) = tab_states.get_state_mut(tab_idx) {
+                Ok(tab_state)
+            } else {
+                Err(Error::new("tab state not found for tab"))
+            }
+        } else {
+            Err(Error::new("tab state not found for type"))
+        }
+    }
+}
+
 /// Common imports for working with the `tui` module.
 pub mod prelude {
     pub use crate::{
-        TuiPlugin, Tui, TabImpl, KeyBind, TuiNewTabTypes
+        TuiPlugin, Tui, TabImpl, KeyBind, TuiNewTabTypes, TuiContextExt, TabState
     };
 
     pub use ratatui::{

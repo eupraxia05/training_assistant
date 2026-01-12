@@ -1,9 +1,9 @@
 //! A plugin that adds a set of commands for editing the database.
 use framework::prelude::*;
 use clap::{Command, Arg, ArgMatches};
-use tui::{KeyBind, TabImpl, TuiNewTabTypes, TabState};
+use tui::prelude::*;
 use ratatui::{
-    widgets::{Wrap, Block, Paragraph, Widget, Row, Table, List, ListState, HighlightSpacing, StatefulWidget},
+    widgets::{Wrap, Block, Paragraph, Widget, Row, TableState, Table, List, ListState, HighlightSpacing, StatefulWidget},
     style::{Style, Stylize, Color},
     buffer::Buffer,
     layout::{Constraint, Rect},
@@ -326,6 +326,7 @@ struct EditTabState {
     list_state: ListState,
     table_name: Option<String>,
     available_tables: Vec<String>,
+    table_state: Option<TableState>
 }
 
 impl TabImpl for EditTabImpl {
@@ -368,36 +369,7 @@ impl TabImpl for EditTabImpl {
                 Paragraph::new("No tables.").block(block).render(rect, buffer);
             }
         } else {
-            // TODO: dejank this
-            let table_name = context.get_resource_mut::<TabState<EditTabState>>().unwrap().get_state_mut(tab_id).unwrap().table_name.clone().unwrap();
-            // TODO: get rid of this unwrap
-            let db_connection = context.get_resource_mut::<DbConnection>().unwrap();
-            let table_config = db_connection.tables().iter().find(|t| t.table_name == table_name).unwrap();
-            let field_names = (table_config.field_names_fn)();
-           
-            // TODO: remove this unwrap
-            let row_ids = db_connection.get_table_row_ids(table_name.clone()).unwrap();
-            
-            let mut rows = Vec::new();
-
-            for row in &row_ids {
-                rows.push(Row::new((table_config.get_fields_as_strings_fn)(db_connection, table_name.clone(), RowId(*row))));
-            }
-            
-            let widths = field_names.iter().map(|f| Constraint::Min(f.len().try_into().unwrap()));
-            let table = Table::new(rows, widths)
-                .column_spacing(1)
-                .header(
-                    Row::new(field_names)
-                    .style(Style::new().bold())
-                    .bottom_margin(1)
-                )
-                .footer(Row::new(vec![format!("{} rows", row_ids.len())]))
-                .block(block.clone())
-                .row_highlight_style(Style::new().reversed())
-                .highlight_symbol(">>");
-            Widget::render(table, rect, buffer);
-
+            render_table_view(context, tab_id, block, rect, buffer).expect("failed to render table view");
         }
     }
 
@@ -418,6 +390,20 @@ impl TabImpl for EditTabImpl {
                 modifiers: KeyModifiers::NONE,
             },
             KeyBind {
+                name: "move_right".into(),
+                display_key: "Right".into(),
+                display_name: "Move Right".into(),
+                key_code: KeyCode::Right,
+                modifiers: KeyModifiers::NONE,
+            },
+            KeyBind {
+                name: "move_left".into(),
+                display_key: "Left".into(),
+                display_name: "Move Left".into(),
+                key_code: KeyCode::Left,
+                modifiers: KeyModifiers::NONE,
+            },
+            KeyBind {
                 name: "select".into(),
                 display_key: "Enter".into(),
                 display_name: "Select".into(),
@@ -434,20 +420,83 @@ impl TabImpl for EditTabImpl {
         
         match bind {
             "move_up" => {
-                state.list_state.select_previous();
+                if let Some(table_state) = &mut state.table_state {
+                    table_state.select_previous();
+                } else {
+                    state.list_state.select_previous();
+                }
             },
             "move_down" => {
-                state.list_state.select_next();
+                if let Some(table_state) = &mut state.table_state {
+                    table_state.select_next();
+                } else {
+                    state.list_state.select_next();
+                }
+            },
+            "move_right" => {
+                if let Some(table_state) = &mut state.table_state {
+                    table_state.select_next_column();
+                }
+            },
+            "move_left" => {
+                if let Some(table_state) = &mut state.table_state {
+                    table_state.select_previous_column();
+                }
             },
             "select" => {
                 // TODO: get rid of this unwrap
                 // TODO: range check
                 let table_name = state.available_tables[state.list_state.selected().unwrap()].clone();
                 state.table_name = Some(table_name);
+                let mut table_state = TableState::default();
+                table_state.select_cell(Some((0, 0)));
+                state.table_state = Some(table_state);
             }
             _ => { }
         }
     }
+}
+
+fn render_table_view(context: &mut Context, tab_id: usize, block: Block, rect: Rect, buffer: &mut Buffer) -> Result<()> {
+    // TODO: dejank this
+    let table_name = context.tab_state::<EditTabState>(tab_id)?.table_name.clone().unwrap();
+    // TODO: get rid of this unwrap
+    let db_connection = context.get_resource_mut::<DbConnection>().unwrap();
+    let table_config = db_connection.tables().iter().find(|t| t.table_name == table_name).unwrap();
+    let field_names = (table_config.field_names_fn)();
+   
+    // TODO: remove this unwrap
+    let row_ids = db_connection.get_table_row_ids(table_name.clone()).unwrap();
+    
+    let mut rows = Vec::new();
+
+    for row in &row_ids {
+        rows.push(Row::new((table_config.get_fields_as_strings_fn)(db_connection, table_name.clone(), RowId(*row))));
+    }
+    
+    let widths = field_names.iter().map(|f| Constraint::Min(f.len().try_into().unwrap()));
+
+    let table = Table::new(rows, widths)
+        .column_spacing(1)
+        .header(
+            Row::new(field_names)
+            .style(Style::new().bold())
+            .bottom_margin(1)
+        )
+        .footer(Row::new(vec![format!("{} rows", row_ids.len())]))
+        .block(block.clone())
+        .cell_highlight_style(Style::new().reversed())
+        .highlight_symbol(">>");
+
+    let tab_state = context.tab_state_mut::<EditTabState>(tab_id)?;
+
+    if let Some(table_state) = &mut tab_state.table_state {
+        StatefulWidget::render(table, rect, buffer, table_state);
+    } else {
+        Widget::render(table, rect, buffer);
+    }
+
+    Ok(())
 }
 
 struct TableEditorWindow;
