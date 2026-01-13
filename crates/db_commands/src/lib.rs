@@ -6,7 +6,7 @@ use ratatui::{
     widgets::{Wrap, Block, Paragraph, Widget, Row, TableState, Table, List, ListState, HighlightSpacing, StatefulWidget},
     style::{Style, Stylize, Color},
     buffer::Buffer,
-    layout::{Constraint, Rect},
+    layout::{Constraint, Rect, Layout},
 };
 use crossterm::event::{KeyModifiers, KeyCode};
 use tabled::{builder::Builder as TabledBuilder};
@@ -444,13 +444,17 @@ impl TabImpl for EditTabImpl {
                 }
             },
             "select" => {
-                // TODO: get rid of this unwrap
-                // TODO: range check
-                let table_name = state.available_tables[state.list_state.selected().unwrap()].clone();
-                state.table_name = Some(table_name);
-                let mut table_state = TableState::default();
-                table_state.select_cell(Some((0, 0)));
-                state.table_state = Some(table_state);
+                if state.table_name.is_some() {
+                    
+                } else {
+                    // TODO: get rid of this unwrap
+                    // TODO: range check
+                    let table_name = state.available_tables[state.list_state.selected().unwrap()].clone();
+                    state.table_name = Some(table_name);
+                    let mut table_state = TableState::default();
+                    table_state.select_cell(Some((0, 0)));
+                    state.table_state = Some(table_state);
+                }
             }
             _ => { }
         }
@@ -476,6 +480,9 @@ fn render_table_view(context: &mut Context, tab_id: usize, block: Block, rect: R
     
     let widths = field_names.iter().map(|f| Constraint::Min(f.len().try_into().unwrap()));
 
+    let table_block = Block::new().borders(ratatui::widgets::Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Rounded);
+
     let table = Table::new(rows, widths)
         .column_spacing(1)
         .header(
@@ -484,17 +491,30 @@ fn render_table_view(context: &mut Context, tab_id: usize, block: Block, rect: R
             .bottom_margin(1)
         )
         .footer(Row::new(vec![format!("{} rows", row_ids.len())]))
-        .block(block.clone())
+        .block(table_block.clone())
         .cell_highlight_style(Style::new().reversed())
         .highlight_symbol(">>");
 
     let tab_state = context.tab_state_mut::<EditTabState>(tab_id)?;
 
+    let layout = Layout::vertical([Constraint::Min(1), Constraint::Length(3)]);
+
+    Widget::render(block.clone(), rect, buffer);
+
+    let [table_area, edit_field_area] = layout.areas(block.inner(rect));
+
     if let Some(table_state) = &mut tab_state.table_state {
-        StatefulWidget::render(table, rect, buffer, table_state);
+        StatefulWidget::render(table, table_area, buffer, table_state);
     } else {
-        Widget::render(table, rect, buffer);
+        Widget::render(table, table_area, buffer);
     }
+    
+    let edit_field_block = Block::new().borders(ratatui::widgets::Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Rounded);
+
+    let edit_field = Paragraph::new(Line::raw("edit field lmao")).block(edit_field_block);
+
+    Widget::render(edit_field, edit_field_area, buffer);
 
     Ok(())
 }
