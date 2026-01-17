@@ -232,11 +232,11 @@ fn generate_latex(
         "client".into(),
         invoice.client,
     )?;
-    let charge = Charge::from_table_row(
-        db_connection,
-        "charge".into(),
-        invoice.charges[0],
-    )?;
+
+    let charges = invoice.charges.iter().map(|c| {
+        // todo: get rid of this unwrap
+        Charge::from_table_row(db_connection, "charge".into(), *c).unwrap() 
+    }).collect::<Vec<_>>();
 
     // Create the document and set up the preamble with all the needed data.
     let mut doc =
@@ -246,14 +246,26 @@ fn generate_latex(
         package: "geometry".into(),
         argument: Some("margin=0.5in".into()),
     });
-    doc.preamble.push(PreambleElement::UsePackage {
+    /*doc.preamble.push(PreambleElement::UsePackage {
         package: "quattrocento".into(),
         argument: Some("sfdefault".into()),
-    });
+    });*/
     doc.preamble.push(PreambleElement::UsePackage {
         package: "fontenc".into(),
         argument: Some("T1".into()),
     });
+    doc.preamble.push(PreambleElement::UsePackage {
+        package: "graphicx".into(),
+        argument: None
+    });
+    doc.preamble.push(PreambleElement::UsePackage {
+        package: "array".into(),
+        argument: None
+    });
+    doc.preamble.push(NewCommand(
+        "trainername".into(),
+        trainer.name().clone(),
+    ));
     doc.preamble.push(NewCommand(
         "companyname".into(),
         trainer.company_name().clone(),
@@ -290,17 +302,34 @@ fn generate_latex(
         "paidvia".into(),
         invoice.paid_via,
     ));
+
+    let mut charge_data = String::from("");
+    let mut charge_total = 0;
+
+    for charge in charges {
+        charge_data.push_str(format!("{} & {} & {} \\\\", charge.date, charge.description, charge.amount).as_str());
+        charge_total += charge.amount;
+    }
+
     doc.preamble.push(NewCommand(
-        "chargedate".into(),
-        charge.date,
+        "chargedata".into(),
+        charge_data,
     ));
+
     doc.preamble.push(NewCommand(
-        "chargedescription".into(),
-        charge.description,
+        "chargetotal".into(),
+        format!("{}", charge_total),
     ));
+
+    let company_header = if let Some(logo_path) = trainer.logo_path() {
+        format!("\\includegraphics[width=256px]{{{}}}", logo_path)
+    } else {
+        format!("\\Large\\textbf{{{}}}", trainer.company_name())
+    };
+    // TODO: get rid of this unwrap
     doc.preamble.push(NewCommand(
-        "chargeamount".into(),
-        charge.amount.to_string(),
+        "companyheader".into(),
+        company_header
     ));
 
     // push the invoice template into the document now that all commands are

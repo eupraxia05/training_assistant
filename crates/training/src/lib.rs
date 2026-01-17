@@ -34,6 +34,7 @@ pub struct Trainer {
     address: String,
     email: String,
     phone: String,
+    logo_path: Option<String>,
 }
 
 impl Trainer {
@@ -60,6 +61,11 @@ impl Trainer {
     /// Gets the trainer's phone number.
     pub fn phone(&self) -> &String {
         &self.phone
+    }
+
+    /// Gets the trainer's logo path, or `None` if no logo path is specified.
+    pub fn logo_path(&self) -> &Option<String> {
+        &self.logo_path
     }
 }
 

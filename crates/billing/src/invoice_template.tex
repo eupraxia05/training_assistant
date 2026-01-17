@@ -1,8 +1,8 @@
-\begin{center}
-	{\Large\bfseries \companyname}\\
-	{\companyaddress}\\
-	Email: \companyemail \hspace{1cm} Phone \companyphone
-\end{center}
+\begin{tabular}{>{\centering\arraybackslash}m{10cm} >{\centering\arraybackslash}m{7cm}}
+	\companyheader
+	& \begin{tabular}{@{}r@{}}\trainername \\ \companyemail \\ \companyphone \\ \companyaddress \end{tabular}
+	\vskip2.0ex
+\end{tabular}
 
 \vspace{0.5cm}
 \hrule
@@ -20,9 +20,9 @@
 	\hline
 	\textbf{Date} & \textbf{Description} & \textbf{Amount (\$)} \\
 	\hline
-	\chargedate & \chargedescription & \chargeamount \\
+	\chargedata
 	\hhline{|=|=|=|}
-	\multicolumn{2}{|l|}{\textbf{Total}} & \textbf{20} \\
+	\multicolumn{2}{|l|}{\textbf{Total}} & \textbf{\chargetotal} \\
 	\hline
 \end{tabular}
 \end{center}

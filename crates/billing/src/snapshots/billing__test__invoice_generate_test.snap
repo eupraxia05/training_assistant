@@ -5,8 +5,10 @@ expression: rendered
 \documentclass{article}
 \usepackage{hhline}
 \usepackage[margin=0.5in]{geometry}
-\usepackage[sfdefault]{quattrocento}
 \usepackage[T1]{fontenc}
+\usepackage{graphicx}
+\usepackage{array}
+\newcommand{\trainername}{Tara Trainer}
 \newcommand{\companyname}{Tara Fitness}
 \newcommand{\companyaddress}{2127 Xanthia St, Denver, CO 80220}
 \newcommand{\companyemail}{tara@gmail.com}
@@ -16,15 +18,15 @@ expression: rendered
 \newcommand{\paymentdue}{11/06/2025}
 \newcommand{\paymentmade}{11/07/2025}
 \newcommand{\paidvia}{Cash}
-\newcommand{\chargedate}{11/05/2025}
-\newcommand{\chargedescription}{Personal training session (60 min)}
-\newcommand{\chargeamount}{50}
+\newcommand{\chargedata}{11/05/2025 & Personal training session (60 min) & 50 \\}
+\newcommand{\chargetotal}{50}
+\newcommand{\companyheader}{\Large\textbf{Tara Fitness}}
 \begin{document}
-\begin{center}
-	{\Large\bfseries \companyname}\\
-	{\companyaddress}\\
-	Email: \companyemail \hspace{1cm} Phone \companyphone
-\end{center}
+\begin{tabular}{>{\centering\arraybackslash}m{10cm} >{\centering\arraybackslash}m{7cm}}
+	\companyheader
+	& \begin{tabular}{@{}r@{}}\trainername \\ \companyemail \\ \companyphone \\ \companyaddress \end{tabular}
+	\vskip2.0ex
+\end{tabular}
 
 \vspace{0.5cm}
 \hrule
@@ -42,9 +44,9 @@ expression: rendered
 	\hline
 	\textbf{Date} & \textbf{Description} & \textbf{Amount (\$)} \\
 	\hline
-	\chargedate & \chargedescription & \chargeamount \\
+	\chargedata
 	\hhline{|=|=|=|}
-	\multicolumn{2}{|l|}{\textbf{Total}} & \textbf{20} \\
+	\multicolumn{2}{|l|}{\textbf{Total}} & \textbf{\chargetotal} \\
 	\hline
 \end{tabular}
 \end{center}
