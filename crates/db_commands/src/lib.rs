@@ -326,7 +326,9 @@ struct EditTabState {
     list_state: ListState,
     table_name: Option<String>,
     available_tables: Vec<String>,
-    table_state: Option<TableState>
+    table_state: Option<TableState>,
+    edit_cell: Option<(usize, usize)>,
+    display_err: Option<String>,
 }
 
 impl TabImpl for EditTabImpl {
@@ -409,17 +411,23 @@ impl TabImpl for EditTabImpl {
                 display_name: "Select".into(),
                 key_code: KeyCode::Enter,
                 modifiers: KeyModifiers::NONE,
-            }
+            },
+            KeyBind {
+                name: "back".into(),
+                display_key: "Esc".into(),
+                display_name: "Back".into(),
+                key_code: KeyCode::Esc,
+                modifiers: KeyModifiers::NONE,
+            },
         ]
     }
     
     fn handle_key(context: &mut Context, bind: &str, tab_id: usize) {
-        // TODO: get rid of these unwraps
-        let state = context.get_resource_mut::<TabState<EditTabState>>().unwrap()
-            .get_state_mut(tab_id).unwrap();
-        
+        // TODO: get rid of these unwraps 
         match bind {
             "move_up" => {
+                let state = context.tab_state_mut::<EditTabState>(tab_id).unwrap();
+                state.display_err = None;
                 if let Some(table_state) = &mut state.table_state {
                     table_state.select_previous();
                 } else {
@@ -427,6 +435,8 @@ impl TabImpl for EditTabImpl {
                 }
             },
             "move_down" => {
+                let state = context.tab_state_mut::<EditTabState>(tab_id).unwrap();
+                state.display_err = None;
                 if let Some(table_state) = &mut state.table_state {
                     table_state.select_next();
                 } else {
@@ -434,19 +444,28 @@ impl TabImpl for EditTabImpl {
                 }
             },
             "move_right" => {
+                let state = context.tab_state_mut::<EditTabState>(tab_id).unwrap();
+                state.display_err = None;
                 if let Some(table_state) = &mut state.table_state {
                     table_state.select_next_column();
                 }
             },
             "move_left" => {
+                let state = context.tab_state_mut::<EditTabState>(tab_id).unwrap();
+                state.display_err = None;
                 if let Some(table_state) = &mut state.table_state {
                     table_state.select_previous_column();
                 }
             },
             "select" => {
-                if state.table_name.is_some() {
-                    
+                context.tab_state_mut::<EditTabState>(tab_id).unwrap().display_err = None;
+                let is_editing_table = context.tab_state_mut::<EditTabState>(tab_id).unwrap().table_name.is_some();
+                if is_editing_table {
+                    if let Err(e) = on_select_cell(context, tab_id) {
+                        context.tab_state_mut::<EditTabState>(tab_id).unwrap().display_err = Some(e.message().clone().unwrap_or("".into()));
+                    }
                 } else {
+                    let state = context.tab_state_mut::<EditTabState>(tab_id).unwrap();
                     // TODO: get rid of this unwrap
                     // TODO: range check
                     let table_name = state.available_tables[state.list_state.selected().unwrap()].clone();
@@ -455,10 +474,37 @@ impl TabImpl for EditTabImpl {
                     table_state.select_cell(Some((0, 0)));
                     state.table_state = Some(table_state);
                 }
-            }
+            },
+            "back" => {
+                let state = context.tab_state_mut::<EditTabState>(tab_id).unwrap();
+                state.display_err = None;
+                if state.edit_cell.is_some() {
+                    state.edit_cell = None;
+                } else if state.table_name.is_some() {
+                    state.table_name = None;
+                    state.table_state = None;
+                }
+            },
             _ => { }
         }
     }
+}
+
+fn on_select_cell(context: &mut Context, tab_id: usize) -> Result<()> {
+    let table_name = context.tab_state::<EditTabState>(tab_id)?
+        .table_name.clone().ok_or(Error::new("not editing table"))?;
+    let table_config = context.db_connection()?.tables().iter().find(|t| t.table_name == table_name).ok_or(Error::new("couldn't find table config"))?;
+    let field_types = (table_config.field_types_fn)();
+    let selected_cell = context.tab_state::<EditTabState>(tab_id)?.table_state.as_ref().ok_or(Error::new("couldn't get table state"))?
+        .selected_cell().ok_or(Error::new("couldn't get selected cell"))?;
+    let field_type_id = field_types.get(selected_cell.1).ok_or(Error::new(format!("couldn't get field type id, field_types: {:?}", field_types)))?.type_id;
+    if field_type_id != std::any::TypeId::of::<String>() {
+        return Err(Error::new("can't edit field type"));
+    }
+    if let Some(table_state) = &mut context.tab_state_mut::<EditTabState>(tab_id)?.table_state {
+        context.tab_state_mut::<EditTabState>(tab_id)?.edit_cell = table_state.selected_cell();
+    }
+    Ok(())
 }
 
 fn render_table_view(context: &mut Context, tab_id: usize, block: Block, rect: Rect, buffer: &mut Buffer) -> Result<()> {
@@ -487,8 +533,7 @@ fn render_table_view(context: &mut Context, tab_id: usize, block: Block, rect: R
         .column_spacing(1)
         .header(
             Row::new(field_names)
-            .style(Style::new().bold())
-            .bottom_margin(1)
+            .style(Style::new().reversed())
         )
         .footer(Row::new(vec![format!("{} rows", row_ids.len())]))
         .block(table_block.clone())
@@ -512,9 +557,19 @@ fn render_table_view(context: &mut Context, tab_id: usize, block: Block, rect: R
     let edit_field_block = Block::new().borders(ratatui::widgets::Borders::ALL)
         .border_type(ratatui::widgets::BorderType::Rounded);
 
-    let edit_field = Paragraph::new(Line::raw("edit field lmao")).block(edit_field_block);
+    if let Some(display_err) = tab_state.display_err.as_ref() {
+        let err_text = Paragraph::new(Line::raw(display_err)).block(edit_field_block);
+        Widget::render(err_text, edit_field_area, buffer);
+    } else {
+        if let Some(edit_cell) = tab_state.edit_cell {
+            let edit_field = Paragraph::new(Line::raw("editing field lmao")).block(edit_field_block);
+            Widget::render(edit_field, edit_field_area, buffer);
+        } else {
+            let edit_field = Paragraph::new(Line::raw("not editing field lmao")).block(edit_field_block);
+            Widget::render(edit_field, edit_field_area, buffer);
+        }
+    }
 
-    Widget::render(edit_field, edit_field_area, buffer);
 
     Ok(())
 }

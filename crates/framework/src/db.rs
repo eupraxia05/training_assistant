@@ -269,7 +269,7 @@ pub trait TableRow: Sized + std::fmt::Debug {
         row_id: RowId,
     ) -> Result<Self>;
     
-    /// Pushes a record into a `tabled::TableBuilder`
+/// Pushes a record into a `tabled::TableBuilder`
     /// containing the names of each field.
     /// Called once at the beginning, then
     /// `push_tabled_record` is called for each
@@ -283,10 +283,29 @@ pub trait TableRow: Sized + std::fmt::Debug {
     fn push_tabled_record(builder: &mut TabledBuilder, db_connection: &DbConnection, table_name: String, row_id: RowId);
 
     /// Gets all the field names of this row type.
+    // TODO: remove this in favor of field_types
     fn field_names() -> Vec<String>;
 
     /// Gets all the fields of a row from a table, as strings.
     fn get_fields_as_strings(db_connection: &DbConnection, table_name: String, row_id: RowId) -> Vec<String>;
+
+    fn field_types() -> Vec<FieldTypeInfo>;
+}
+
+#[derive(Debug)]
+pub struct FieldTypeInfo {
+    pub name: String,
+    pub type_id: std::any::TypeId
+}
+
+impl FieldTypeInfo {
+    pub fn name(&self) -> &String {
+       &self.name 
+    }
+
+    pub fn type_id(&self) -> std::any::TypeId {
+        self.type_id
+    }
 }
 
 /// A trait for types stored in a SQL database. Useful
@@ -347,6 +366,8 @@ pub struct TableConfig {
     /// See `FieldNamesFn`.
     pub field_names_fn: FieldNamesFn,
 
+    pub field_types_fn: FieldTypesFn,
+
     /// See `GetFieldsAsStringsFn`.
     pub get_fields_as_strings_fn: GetFieldsAsStringsFn
 }
@@ -364,6 +385,7 @@ impl TableConfig {
             push_tabled_header_fn: T::push_tabled_header,
             push_tabled_record_fn: T::push_tabled_record,
             field_names_fn: T::field_names,
+            field_types_fn: T::field_types,
             get_fields_as_strings_fn: T::get_fields_as_strings,
         }
     }
@@ -393,6 +415,9 @@ pub type PushTabledRecordFn = fn (&mut TabledBuilder, &DbConnection, String, Row
 /// row type.
 pub type FieldNamesFn =
     fn() -> Vec<String>;
+
+pub type FieldTypesFn =
+    fn() -> Vec<FieldTypeInfo>;
 
 /// A pointer to a function used to get the fields from a table row as strings.
 /// Generally points to the `TableRow::get_fields_as_strings` implementation for
@@ -779,6 +804,14 @@ mod test {
         // test db connection shouldn't have a file path
         assert!(db_connection.db_path().is_none());
         
+        // test field type info
+        let field_types = (db_connection.tables.iter()
+            .find(|t| t.table_name == "foo").ok_or(Error::default())?
+            .field_types_fn)();
+        assert_eq!(field_types.len(), 1);
+        assert_eq!(field_types[0].name(), "bar");
+        assert_eq!(field_types[0].type_id(), std::any::TypeId::of::<String>());
+
         // insert a row and check the inserted row is 
         // row 1
         // (the table was empty)

@@ -57,10 +57,16 @@ fn generate_table_row_impl(
         generate_table_row_setup_fn_definition(
             parsed_fields,
         );
-    let from_table_row_fn_definition = generate_table_row_from_table_row_fn_definition(parsed_fields);
-    let tabled_fn_definitions = generate_tabled_fn_definitions(parsed_fields);
-    let field_names_fn_definition = generate_field_names_fn_definition(parsed_fields);
-    let get_fields_as_strings_fn_definition = generate_get_fields_as_strings_fn_definition(parsed_fields);
+    let from_table_row_fn_definition 
+        = generate_table_row_from_table_row_fn_definition(parsed_fields);
+    let tabled_fn_definitions 
+        = generate_tabled_fn_definitions(parsed_fields);
+    let field_names_fn_definition 
+        = generate_field_names_fn_definition(parsed_fields);
+    let field_types_fn_definition 
+        = generate_field_types_fn_definition(parsed_fields);
+    let get_fields_as_strings_fn_definition 
+        = generate_get_fields_as_strings_fn_definition(parsed_fields);
 
     let struct_name = parsed_struct.name.clone();
 
@@ -73,6 +79,8 @@ fn generate_table_row_impl(
             #tabled_fn_definitions
 
             #field_names_fn_definition
+
+            #field_types_fn_definition
 
             #get_fields_as_strings_fn_definition
         }
@@ -110,7 +118,8 @@ fn generate_table_row_setup_fn_definition(
         fn setup(connection: &mut rusqlite::Connection, table_name: String)
             -> Result<()>
         {
-            let mut table_setup_sql: String = "CREATE TABLE IF NOT EXISTS ".into();
+            let mut table_setup_sql: String 
+                = "CREATE TABLE IF NOT EXISTS ".into();
             table_setup_sql += table_name.as_str();
             table_setup_sql += "(id INTEGER PRIMARY KEY, ";
             #fields_setup_sql
@@ -129,7 +138,8 @@ fn generate_table_row_from_table_row_fn_definition(
 
     for (field, _) in parsed_fields.fields.iter() {
         let s: String = format!(
-            "let {} = {}::from_table_field(db_connection, table_name.clone(), row_id, \"{}\".into())?;",
+            "let {} = {}::from_table_field(db_connection, \
+                table_name.clone(), row_id, \"{}\".into())?;",
             field.name.to_string().as_str(),
             type_expr_to_type_str(&field.ty),
             field.name.to_string().as_str()
@@ -165,17 +175,22 @@ fn generate_table_row_from_table_row_fn_definition(
     }
 }
 
-fn generate_tabled_fn_definitions(fields: &venial::NamedFields) -> proc_macro2::TokenStream {
+fn generate_tabled_fn_definitions(fields: &venial::NamedFields) 
+    -> proc_macro2::TokenStream 
+{
     let mut fields_args = proc_macro2::TokenStream::new();
 
     for (field, _) in fields.fields.iter() {
-        fields_args.extend(format!("\"{}\", ", field.name.to_string()).parse::<proc_macro2::TokenStream>());
+        fields_args.extend(format!("\"{}\", ", 
+            field.name.to_string()).parse::<proc_macro2::TokenStream>());
     }
 
     let mut record_fields_args = proc_macro2::TokenStream::new();
     for (field, _) in fields.fields.iter() {
-        let field_str = format!("format!(\"{{:?}}\", record.{}), ", field.name.to_string());
-        record_fields_args.extend(field_str.parse::<proc_macro2::TokenStream>());
+        let field_str = format!("format!(\"{{:?}}\", record.{}), ", 
+            field.name.to_string());
+        record_fields_args.extend(
+            field_str.parse::<proc_macro2::TokenStream>());
     }
 
     quote::quote!(
@@ -183,8 +198,12 @@ fn generate_tabled_fn_definitions(fields: &venial::NamedFields) -> proc_macro2::
             builder.push_record(["ID", #fields_args]);
         }
 
-        fn push_tabled_record(builder: &mut tabled::builder::Builder, db_connection: &DbConnection, table_name: String, row_id: RowId) {
-            let Ok(record) = Self::from_table_row(db_connection, table_name, row_id) else {
+        fn push_tabled_record(builder: &mut tabled::builder::Builder, 
+            db_connection: &DbConnection, table_name: String, row_id: RowId) 
+        {
+            let Ok(record) 
+                = Self::from_table_row(db_connection, table_name, row_id) 
+            else {
                 builder.push_record([row_id.0.to_string(), "Err".to_string()]);
                 return;
             };
@@ -194,11 +213,14 @@ fn generate_tabled_fn_definitions(fields: &venial::NamedFields) -> proc_macro2::
     )
 }
 
-fn generate_field_names_fn_definition(fields: &venial::NamedFields) -> proc_macro2::TokenStream {
+fn generate_field_names_fn_definition(fields: &venial::NamedFields) 
+    -> proc_macro2::TokenStream 
+{
     let mut field_names = proc_macro2::TokenStream::new();
 
     for(field, _) in fields.fields.iter() {
-        field_names.extend(format!("\"{}\".to_string(), ", field.name.to_string()).parse::<proc_macro2::TokenStream>());
+        field_names.extend(format!("\"{}\".to_string(), ", 
+            field.name.to_string()).parse::<proc_macro2::TokenStream>());
     }
 
     quote::quote!(
@@ -208,7 +230,33 @@ fn generate_field_names_fn_definition(fields: &venial::NamedFields) -> proc_macr
     )
 }
 
-fn generate_get_fields_as_strings_fn_definition(fields: &venial::NamedFields) -> proc_macro2::TokenStream {
+fn generate_field_types_fn_definition(fields: &venial::NamedFields) 
+    -> proc_macro2::TokenStream 
+{
+    let mut field_types = proc_macro2::TokenStream::new();
+
+    for(field, _) in fields.fields.iter() {
+        let field_name = field.name.to_string();
+        let field_type = field.ty.clone();
+
+        field_types.extend(quote::quote!{
+            framework::db::FieldTypeInfo {
+                name: #field_name.into(),
+                type_id: std::any::TypeId::of::<#field_type>()
+            },
+        });
+    }
+
+    quote::quote!(
+        fn field_types() -> Vec<framework::db::FieldTypeInfo> {
+            vec![#field_types]
+        }
+    )
+}
+
+fn generate_get_fields_as_strings_fn_definition(fields: &venial::NamedFields) 
+    -> proc_macro2::TokenStream 
+{
     let mut get_fields_as_strings = proc_macro2::TokenStream::new();
 
     for (field, _) in fields.fields.iter() {
@@ -221,7 +269,8 @@ fn generate_get_fields_as_strings_fn_definition(fields: &venial::NamedFields) ->
                 if segment == "display_table" {
                     let value_tokens = attribute.value.get_value_tokens();
                     if value_tokens.len() == 3 {
-                        display_table = Some((value_tokens[0].to_string(), value_tokens[2].to_string()));
+                        display_table = Some((value_tokens[0].to_string(), 
+                            value_tokens[2].to_string()));
                     }
                 }
             }
@@ -242,12 +291,15 @@ fn generate_get_fields_as_strings_fn_definition(fields: &venial::NamedFields) ->
         // TODO: get rid of the unwrap
         let get_field = quote::quote!{
             {
-                let table_field = <#field_type>::from_table_field(db_connection, table_name.clone(), row_id, #field_name.into()).unwrap();
-                let display_str_args = framework::db::TableFieldDisplayStringArgs {
-                    db_connection,
-                    #display_table_tokens 
-                };
-                let display_str = <#field_type>::to_display_string(&table_field, display_str_args);        
+                let table_field = <#field_type>::from_table_field(db_connection, 
+                    table_name.clone(), row_id, #field_name.into()).unwrap();
+                let display_str_args 
+                    = framework::db::TableFieldDisplayStringArgs {
+                        db_connection,
+                        #display_table_tokens 
+                    };
+                let display_str = <#field_type>::to_display_string(
+                    &table_field, display_str_args);        
                 result.push(display_str);
             }
         };
@@ -256,7 +308,9 @@ fn generate_get_fields_as_strings_fn_definition(fields: &venial::NamedFields) ->
     }
 
     quote::quote!(
-        fn get_fields_as_strings(db_connection: &DbConnection, table_name: String, row_id: RowId) -> Vec<String> {
+        fn get_fields_as_strings(db_connection: &DbConnection, 
+            table_name: String, row_id: RowId) -> Vec<String> 
+        {
             let mut result = Vec::new();
             #get_fields_as_strings
             result
@@ -264,8 +318,8 @@ fn generate_get_fields_as_strings_fn_definition(fields: &venial::NamedFields) ->
     )
 }
 
-// converts a parsed type expression to a type we can use for namespaced function calls
-// e.g. MyTableRowType::setup()
+// converts a parsed type expression to a type we can use for namespaced 
+// function calls e.g. MyTableRowType::setup()
 // panics if the type expression can't be expanded
 fn type_expr_to_type_str(
     type_expr: &TypeExpr,

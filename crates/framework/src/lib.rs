@@ -54,7 +54,8 @@ pub mod prelude {
         context::{CommandResponse, Context, Plugin, Resource},
         db::{
             DbConnection, DbPlugin,
-            TableField, RowId, TableConfig, TableRow, DbContextExt
+            TableField, RowId, TableConfig, TableRow, DbContextExt,
+            FieldTypeInfo
         },
     };
 }

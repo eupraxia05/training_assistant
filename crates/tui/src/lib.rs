@@ -607,10 +607,18 @@ impl TabImpl for AboutTabImpl {
     }
 }
 
+/// An extension trait adding to a `Context` functions to interact with TUI systems.
 pub trait TuiContextExt {
-    fn tab_state<S>(&self, tab_idx: usize) -> Result<&S>
+    /// Gets the tab state corresponding to the given tab ID, if it exists.
+    /// 
+    /// * `tab_id` - The ID of the tab state to get.
+    fn tab_state<S>(&self, tab_id: usize) -> Result<&S>
         where S: Default + 'static;
-    fn tab_state_mut<S>(&mut self, tab_idx: usize) -> Result<&mut S>
+    
+    /// Gets the mutable tab statee corresponding to the given tab ID, if it exists.
+    ///
+    /// * `tab_id` - The ID of the tab state to get.
+    fn tab_state_mut<S>(&mut self, tab_id: usize) -> Result<&mut S>
         where S: Default + 'static;
 }
 
