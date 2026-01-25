@@ -30,14 +30,22 @@ pub fn write_document(
     let dest_path =
         out_folder.join(format!("{}.pdf", file_name));
 
+    println!("1");
+
     std::fs::create_dir_all(temp_dir.clone())
         .map_err(|e| e.to_string())?;
+
+    println!("2");
 
     let rendered = latex::print(doc)
         .map_err(|e| e.to_string())?;
     
+    println!("3");
+
     std::fs::write(tex_path.clone(), rendered)
         .map_err(|e| e.to_string())?;
+
+    println!("4");
 
     let mut cmd = Command::new("pdflatex");
         cmd.stdout(Stdio::null())
@@ -50,6 +58,8 @@ pub fn write_document(
 
     let _cmd_output =
         cmd.output().map_err(|e| e.to_string())?;
+
+    println!("5");
 
     // TODO: make an argument to enable this
     /*println!("piping command output...");
@@ -67,7 +77,9 @@ pub fn write_document(
         .flush()
         .map_err(|e| e.to_string())?;*/
 
-    std::fs::copy(pdf_path, dest_path)
+    println!("{:?}, {:?}", pdf_path, dest_path);
+
+    std::fs::copy(pdf_path.clone(), dest_path.clone())
         .map_err(|e| e.to_string())?;
 
     Ok(())

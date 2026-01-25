@@ -8,9 +8,10 @@ use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Rect, Layout},
 };
-use crossterm::event::{KeyModifiers, KeyCode};
+use ratatui::crossterm::event::{KeyModifiers, KeyCode};
 use tabled::{builder::Builder as TabledBuilder};
 use gui::prelude::*;
+use tui_textarea::Input;
 
 ///////////////////////////////////////////////////////////////////////////////
 // PUBLIC API
@@ -317,6 +318,10 @@ impl TabImpl for DbInfoTabImpl {
     fn handle_key(_context: &mut Context, _bind_name: &str, _tab_idx: usize) {
 
     }
+
+    fn handle_text(_: &mut framework::context::Context, _: ratatui::crossterm::event::Event, _: usize) {
+
+    }
 }
 
 struct EditTabImpl;
@@ -329,6 +334,7 @@ struct EditTabState {
     table_state: Option<TableState>,
     edit_cell: Option<(usize, usize)>,
     display_err: Option<String>,
+    text_area: Option<tui_textarea::TextArea<'static>>,
 }
 
 impl TabImpl for EditTabImpl {
@@ -480,12 +486,24 @@ impl TabImpl for EditTabImpl {
                 state.display_err = None;
                 if state.edit_cell.is_some() {
                     state.edit_cell = None;
+                    state.text_area = None;
                 } else if state.table_name.is_some() {
                     state.table_name = None;
                     state.table_state = None;
                 }
             },
             _ => { }
+        }
+    }
+
+    fn handle_text(context: &mut framework::context::Context, ev: ratatui::crossterm::event::Event, tab_id: usize) {
+        match ev.clone().into() {
+            Input { key: tui_textarea::Key::Esc, .. } => {
+                context.get_resource_mut::<Tui>().unwrap().set_input_mode(tui::TuiInputMode::Bind);
+            },
+            input => {
+                context.tab_state_mut::<EditTabState>(tab_id).unwrap().text_area.as_mut().unwrap().input(input); 
+            }
         }
     }
 }
@@ -503,6 +521,8 @@ fn on_select_cell(context: &mut Context, tab_id: usize) -> Result<()> {
     }
     if let Some(table_state) = &mut context.tab_state_mut::<EditTabState>(tab_id)?.table_state {
         context.tab_state_mut::<EditTabState>(tab_id)?.edit_cell = table_state.selected_cell();
+        context.tab_state_mut::<EditTabState>(tab_id)?.text_area = Some(tui_textarea::TextArea::default());
+        context.get_resource_mut::<Tui>().ok_or(Error::default())?.set_input_mode(tui::TuiInputMode::Text);
     }
     Ok(())
 }
@@ -561,9 +581,9 @@ fn render_table_view(context: &mut Context, tab_id: usize, block: Block, rect: R
         let err_text = Paragraph::new(Line::raw(display_err)).block(edit_field_block);
         Widget::render(err_text, edit_field_area, buffer);
     } else {
-        if let Some(edit_cell) = tab_state.edit_cell {
-            let edit_field = Paragraph::new(Line::raw("editing field lmao")).block(edit_field_block);
-            Widget::render(edit_field, edit_field_area, buffer);
+        if let Some(text_area) = &mut tab_state.text_area {
+            //text_area.set_block(block.clone());
+            text_area.render(edit_field_area, buffer);
         } else {
             let edit_field = Paragraph::new(Line::raw("not editing field lmao")).block(edit_field_block);
             Widget::render(edit_field, edit_field_area, buffer);

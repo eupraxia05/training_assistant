@@ -111,6 +111,10 @@ impl TabImpl for ScheduleTabImpl {
     fn handle_key(_: &mut Context, _: &str, _: usize) {
 
     }
+
+    fn handle_text(_: &mut framework::context::Context, _: ratatui::crossterm::event::Event, _: usize) {
+
+    }
 }
 
 /// Represents a scheduled training session.

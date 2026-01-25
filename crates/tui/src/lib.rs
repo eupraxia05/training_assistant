@@ -2,7 +2,7 @@
 use framework::prelude::*;
 use std::any::Any;
 use ratatui::layout::{Rect, Layout, Constraint};
-use crossterm::event::{Event, KeyModifiers, KeyEventKind, KeyCode};
+use ratatui::crossterm::event::{Event, KeyModifiers, KeyEventKind, KeyCode};
 use ratatui::style::{Stylize, Style, Color, palette::tailwind};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Paragraph, StatefulWidget, HighlightSpacing, Borders, Tabs, Widget, List, ListState};
@@ -34,7 +34,8 @@ pub struct Tui {
     quit_requested: bool,
     tabs: Vec<(usize, Tab)>,
     selected_tab: usize,
-    next_tab_id: usize
+    next_tab_id: usize,
+    input_mode: TuiInputMode
 }
 
 impl Tui {
@@ -85,6 +86,17 @@ impl Tui {
         context.get_resource_mut::<Tui>().unwrap().tabs.iter_mut().find(|t| t.0 == tab_id).unwrap().1 = tab;
         (tab_funcs.create_state_fn)(context, tab_id);
     }
+
+    pub fn set_input_mode(&mut self, mode: TuiInputMode) {
+       self.input_mode = mode;
+    }
+}
+
+#[derive(Default, Eq, PartialEq)]
+pub enum TuiInputMode {
+    #[default]
+    Bind,
+    Text
 }
 
 impl Resource for Tui {
@@ -211,6 +223,8 @@ pub trait TabImpl {
     /// * `bind_name` - The name of the keybind pressed.
     /// * `tab_idx` - The tab ID of the currently focused tab.
     fn handle_key(context: &mut Context, bind_name: &str, tab_idx: usize);
+
+    fn handle_text(context: &mut Context, ev: ratatui::crossterm::event::Event, tab_id: usize);
 }
 
 type TabTitleFn = fn () -> String;
@@ -218,6 +232,7 @@ type TabRenderFn = fn (&mut Context, &mut Buffer, Rect, Block, usize);
 type TabKeybindsFn = fn () -> Vec<KeyBind>;
 type TabHandleKeyFn = fn(&mut Context, &str, usize);
 type TabCreateStateFn = fn(&mut Context, tab_idx: usize);
+type TabHandleTextFn = fn(&mut Context, ratatui::crossterm::event::Event, usize);
 
 fn create_state<S>(context: &mut Context, tab_idx: usize) 
     where S: 'static + Default
@@ -235,7 +250,8 @@ struct TabFuncs {
    render_fn: TabRenderFn,
    keybinds_fn: TabKeybindsFn,
    handle_key_fn: TabHandleKeyFn,
-   create_state_fn: TabCreateStateFn
+   create_state_fn: TabCreateStateFn,
+   handle_text_fn: TabHandleTextFn,
 }
 
 impl TabFuncs {
@@ -247,7 +263,8 @@ impl TabFuncs {
             render_fn: T::render,
             keybinds_fn: T::keybinds,
             handle_key_fn: T::handle_key,
-            create_state_fn: create_state::<T::State>
+            create_state_fn: create_state::<T::State>,
+            handle_text_fn: T::handle_text,
         }
     }
 }
@@ -265,10 +282,10 @@ pub struct KeyBind {
     pub display_name: String,
     
     /// The code of the key to bind.
-    pub key_code: KeyCode,
+    pub key_code: ratatui::crossterm::event::KeyCode,
 
     /// Additional modifiers (ctrl, alt, shift, etc)
-    pub modifiers: KeyModifiers,
+    pub modifiers: ratatui::crossterm::event::KeyModifiers,
 }
 
 impl KeyBind {
@@ -347,7 +364,7 @@ pub fn run_tui(context: &mut Context) -> std::result::Result<(), ()> {
     let mut terminal = ratatui::init();
     let result = loop {
         draw_tui(context, &mut terminal)?;
-        let ev = crossterm::event::read().map_err(|_| ())?;
+        let ev = ratatui::crossterm::event::read().map_err(|_| ())?;
         handle_event(context, ev);
         if context.get_resource_mut::<Tui>().unwrap().should_quit() {
             break Ok(());
@@ -429,10 +446,10 @@ fn render_tabs(context: &mut Context, frame: &mut ratatui::Frame) {
         .render(frame.area(), frame.buffer_mut());
 }
 
-fn event_to_key_bind(ev: crossterm::event::Event, keybinds: &Vec<KeyBind>) -> Option<&KeyBind> {
+fn event_to_key_bind(ev: ratatui::crossterm::event::Event, keybinds: &Vec<KeyBind>) -> Option<&KeyBind> {
     let (key_code, modifiers) = match ev {
-        Event::Key(key_event) => {
-            if key_event.kind == KeyEventKind::Press {
+        ratatui::crossterm::event::Event::Key(key_event) => {
+            if key_event.kind == ratatui::crossterm::event::KeyEventKind::Press {
                 (key_event.code, key_event.modifiers)
             } else {
                 return None;
@@ -444,7 +461,17 @@ fn event_to_key_bind(ev: crossterm::event::Event, keybinds: &Vec<KeyBind>) -> Op
     keybinds.iter().find(|k| key_code == k.key_code && modifiers == k.modifiers)
 }
 
-fn handle_event(context: &mut Context, ev: crossterm::event::Event) {
+fn handle_event(context: &mut Context, ev: ratatui::crossterm::event::Event) -> Result<()> {
+    if context.get_resource::<Tui>().ok_or(Error::default())?.input_mode == TuiInputMode::Bind {
+        handle_key_binds(context, ev);
+    } else {
+        handle_text_input(context, ev);
+    }
+
+    Ok(())
+}
+
+fn handle_key_binds(context: &mut Context, ev: ratatui::crossterm::event::Event) {
     let global_keybinds = global_keybinds();
     let tab_keybinds = get_selected_tab_keybinds(context);
     if let Some(bind) = event_to_key_bind(ev.clone(), &global_keybinds) {
@@ -479,6 +506,13 @@ fn handle_event(context: &mut Context, ev: crossterm::event::Event) {
         let funcs = context.get_resource_mut::<Tui>().unwrap().tabs[selected_tab].1.funcs.clone().unwrap_or(TabFuncs::new::<EmptyTabImpl>()).clone();
         (funcs.handle_key_fn)(context, bind.name.as_str(), selected_tab);
     }
+
+}
+
+fn handle_text_input(context: &mut Context, ev: ratatui::crossterm::event::Event) {
+   let selected_tab = context.get_resource_mut::<Tui>().unwrap().selected_tab;
+   let funcs = context.get_resource_mut::<Tui>().unwrap().tabs[selected_tab].1.funcs.clone().unwrap_or(TabFuncs::new::<EmptyTabImpl>()).clone();
+   (funcs.handle_text_fn)(context, ev, selected_tab);
 }
 
 fn process_tui_command(context: &mut Context, _: &ArgMatches) -> Result<CommandResponse> {
@@ -558,6 +592,10 @@ impl TabImpl for EmptyTabImpl {
             _ => { }
         }
     }
+
+    fn handle_text(_: &mut framework::context::Context, _: ratatui::crossterm::event::Event, _: usize) {
+
+    }
 }
 
 struct EmptyTabState {
@@ -603,6 +641,10 @@ impl TabImpl for AboutTabImpl {
     }
 
     fn handle_key(_: &mut Context, _bind: &str, _tab_id: usize) {
+
+    }
+
+    fn handle_text(_: &mut framework::context::Context, _: ratatui::crossterm::event::Event, _: usize) {
 
     }
 }
@@ -688,22 +730,22 @@ mod test {
         // TODO: get rid of the namespace spam here
         // create a new tab
         crate::handle_event(&mut context, 
-            crossterm::event::Event::Key(crossterm::event::KeyEvent {
-               code: crossterm::event::KeyCode::Char('t'),
-               kind: crossterm::event::KeyEventKind::Press,
-               state: crossterm::event::KeyEventState::empty(),
-               modifiers: crossterm::event::KeyModifiers::CONTROL
+            ratatui::crossterm::event::Event::Key(ratatui::crossterm::event::KeyEvent {
+               code: ratatui::crossterm::event::KeyCode::Char('t'),
+               kind: ratatui::crossterm::event::KeyEventKind::Press,
+               state: ratatui::crossterm::event::KeyEventState::empty(),
+               modifiers: ratatui::crossterm::event::KeyModifiers::CONTROL
             })
         );
         crate::draw_tui(&mut context, &mut terminal).unwrap(); 
         insta::assert_snapshot!(terminal.backend());
         // request quit
         crate::handle_event(&mut context, 
-            crossterm::event::Event::Key(crossterm::event::KeyEvent {
-               code: crossterm::event::KeyCode::Char('q'),
-               kind: crossterm::event::KeyEventKind::Press,
-               state: crossterm::event::KeyEventState::empty(),
-               modifiers: crossterm::event::KeyModifiers::NONE
+            ratatui::crossterm::event::Event::Key(ratatui::crossterm::event::KeyEvent {
+               code: ratatui::crossterm::event::KeyCode::Char('q'),
+               kind: ratatui::crossterm::event::KeyEventKind::Press,
+               state: ratatui::crossterm::event::KeyEventState::empty(),
+               modifiers: ratatui::crossterm::event::KeyModifiers::NONE
             })
         );
         assert!(context.get_resource::<Tui>().unwrap().should_quit());

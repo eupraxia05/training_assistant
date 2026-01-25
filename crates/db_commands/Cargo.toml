@@ -11,6 +11,7 @@ gui = { version = "0.1.0", path = "../gui" }
 ratatui = "0.29.0"
 tabled = "0.20.0"
 tui = { path = "../tui" }
+tui-textarea = { version = "0.7.0", features = ["crossterm"] }
 
 [lints]
 workspace = true
