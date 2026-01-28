@@ -116,7 +116,7 @@ fn generate_table_row_setup_fn_definition(
 
     quote::quote! {
         fn setup(connection: &mut rusqlite::Connection, table_name: String)
-            -> Result<()>
+            -> framework::Result<()>
         {
             let mut table_setup_sql: String 
                 = "CREATE TABLE IF NOT EXISTS ".into();
@@ -168,7 +168,7 @@ fn generate_table_row_from_table_row_fn_definition(
             db_connection: &DbConnection,
             table_name: String,
             row_id: RowId
-        ) -> Result<Self>
+        ) -> framework::Result<Self>
         {
             #from_table_row_fn_body
         }

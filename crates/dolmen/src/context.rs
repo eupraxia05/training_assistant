@@ -1,7 +1,4 @@
-use crate::db::{
-    DbConnection,
-};
-use crate::{Error, Result};
+use crate::{Result, Error};
 
 use clap::{ArgMatches, Command};
 use std::ffi::OsString;
@@ -12,13 +9,13 @@ use std::any::{Any, TypeId};
 /// command-line and GUI interfaces.
 ///
 /// ```
-/// # use framework::prelude::*;
+/// # use dolmen::prelude::*;
 /// # use clap::{Command, ArgMatches};
 /// #[derive(Clone)]
 /// struct MyPlugin;
 ///
 /// impl Plugin for MyPlugin {
-///     fn build(self, context: &mut Context) -> Result<()> {
+///     fn build(self, context: &mut Context) -> dolmen::Result<()> {
 ///         context.add_command(
 ///             Command::new("foo"),
 ///             process_foo_command
@@ -30,19 +27,17 @@ use std::any::{Any, TypeId};
 /// fn process_foo_command(
 ///     _: &mut Context,
 ///     _: &ArgMatches,
-///     ) -> Result<CommandResponse>
+///     ) -> dolmen::Result<CommandResponse>
 /// {
 ///     Ok(CommandResponse::new("foo command invoked"))
 /// }
 ///
 /// // ...
 ///
-/// # fn main() -> Result<()> {
+/// # fn main() -> dolmen::Result<()> {
 /// let mut context = Context::new();
-/// # context.in_memory_db(true);
 /// context.add_plugin(MyPlugin);
 /// context.startup()?;
-/// let db_connection = context.db_connection()?;
 /// # Ok(())
 /// # }
 /// ```
@@ -55,9 +50,6 @@ pub struct Context {
     /// Add one with `Context::add_command`.
     commands: Vec<(Command, ProcessCommandFn)>,
 
-    /// Whether or not the db connection should be opened in memory.
-    open_db_in_memory: bool,
-
     resources: HashMap<TypeId, Box<dyn Resource>>
 }
 
@@ -68,7 +60,6 @@ impl Context {
         Self {
             plugins: Vec::default(),
             commands: Vec::default(),
-            open_db_in_memory: false,
             resources: HashMap::new(),
         }
     }
@@ -87,7 +78,8 @@ impl Context {
         }
 
         self.plugins.push(RegisteredPlugin {
-            type_id: std::any::TypeId::of::<P>()
+            type_id: std::any::TypeId::of::<P>(),
+            startup_fn: P::startup,
         });
         plugin.build(self)?;
 
@@ -112,14 +104,6 @@ impl Context {
         self.commands
             .push((command, process_command_fn));
         Ok(self)
-    }
-
-    /// Sets whether or not the database should be
-    /// opened in-memory. Useful for testing.
-    /// Defaults to `false` and does not need to
-    /// be called if a db file is desired.
-    pub fn in_memory_db(&mut self, in_memory: bool) {
-        self.open_db_in_memory = in_memory;
     }
 
     /// Adds a `Resource` to the resource registry. Overwrites
@@ -168,13 +152,11 @@ impl Context {
     /// Call this after adding plugins, tables, and 
     /// commands. Opens a connection to the database.
     pub fn startup(&mut self) -> Result<()> {
-        let db_connection = if self.open_db_in_memory {
-            DbConnection::open_test(self)
-        } else {
-            DbConnection::open_default(self)
-        }?;
+        let startup_fns = self.plugins.iter().map(|p| p.startup_fn).collect::<Vec<_>>();
 
-        self.add_resource(db_connection);
+        for startup_fn in startup_fns {
+            (startup_fn)(self)?;
+        }
 
         Ok(())
     }
@@ -186,11 +168,9 @@ impl Context {
     /// # Example
     ///
     /// ```
-    /// # use framework::prelude::*;
-    /// # fn main() -> Result<()> {
+    /// # use dolmen::prelude::*;
+    /// # fn main() -> dolmen::Result<()> {
     /// # let mut context = Context::new();
-    /// # context.add_plugin(DbPlugin);
-    /// # context.in_memory_db(true);
     /// # context.startup()?;
     /// let response = context.execute("--help")?;
     /// # Ok(())
@@ -254,7 +234,8 @@ impl Default for Context {
 }
 
 struct RegisteredPlugin {
-    type_id: TypeId
+    type_id: TypeId,
+    startup_fn: PluginStartupFn
 }
 
 /// The result of running a successful command.
@@ -290,7 +271,13 @@ type ProcessCommandFn = fn(
 pub trait Plugin {
     /// Runs on adding the plugin to a Context. Use this to register commands, add tables, etc.
     fn build(self, context: &mut Context) -> Result<()>;
+
+    fn startup(_: &mut Context) -> Result<()> {
+        Ok(())
+    }
 }
+
+type PluginStartupFn = fn(context: &mut Context) -> Result<()>;
 
 /// A singleton data type managed by a `Context`. Use `Context::add_resource` to add one,
 /// and `Context::get_resource<T>` to get it.
@@ -313,7 +300,7 @@ mod test {
     struct TestPlugin;
 
     impl Plugin for TestPlugin {
-        fn build(self, context: &mut Context) -> Result<()> {
+        fn build(self, context: &mut Context) -> crate::Result<()> {
             context.add_command(
                 Command::new("test"),
                 process_test_command,
@@ -351,7 +338,7 @@ mod test {
     fn process_test_command(
         _context: &mut Context,
         _arg_matches: &ArgMatches,
-    ) -> Result<CommandResponse> {
+    ) -> crate::Result<CommandResponse> {
         COMMAND_EXECUTED_COUNTER
             .store(1, Ordering::Relaxed);
         Ok(CommandResponse::default())
@@ -363,14 +350,14 @@ mod test {
     fn process_test2_command(
         _context: &mut Context,
         _arg_matches: &ArgMatches,
-    ) -> Result<CommandResponse> {
+    ) -> crate::Result<CommandResponse> {
         COMMAND2_EXECUTED_COUNTER
             .store(1, Ordering::Relaxed);
         Ok(CommandResponse::new("foobar"))
     }
 
     #[test]
-    fn plugin_test() -> Result<()> {
+    fn plugin_test() -> crate::Result<()> {
         let mut context = Context::new();
         context.add_plugin::<TestPlugin>(
             TestPlugin::default(),
@@ -382,7 +369,6 @@ mod test {
         // adding another test command should result in an error
         assert!(context.add_command(Command::new("test"), process_test_command).is_err());
 
-        context.in_memory_db(true);
         assert_eq!(context.commands.len(), 2);
         context.startup()?;
         let response = context.execute("test")?;

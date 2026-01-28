@@ -1,7 +1,7 @@
 //! A plugin for generating invoices and tracking charges.
 use clap::{Arg, ArgMatches, Command};
 use documents::write_document;
-use framework::Result;
+use dolmen::prelude::*;
 use framework::prelude::*;
 use framework_derive_macros::TableRow;
 use latex::{
@@ -75,7 +75,7 @@ pub struct Charge {
 // PRIVATE IMPLEMENTATION
 ///////////////////////////////////////////////////////////////////////////////
 impl Plugin for InvoicePlugin {
-    fn build(self, context: &mut Context) -> Result<()> {
+    fn build(self, context: &mut Context) -> dolmen::Result<()> {
         // set up charge and invoice tables
         context
             .add_table(TableConfig::new::<Charge>("charge"))
@@ -123,7 +123,7 @@ struct InvoiceExportWindow;
 fn process_invoice_generate_command(
     arg_matches: &ArgMatches,
     db_connection: &mut DbConnection,
-) -> Result<CommandResponse> {
+) -> dolmen::Result<CommandResponse> {
     // get the command arguments
     let invoice_row_id = arg_matches
         .get_one::<i64>("invoice-id")
@@ -150,7 +150,7 @@ fn process_invoice_generate_command(
 fn process_invoice_command(
     context: &mut Context,
     arg_matches: &ArgMatches,
-) -> Result<CommandResponse> {
+) -> dolmen::Result<CommandResponse> {
     // get the database connection
     let db_connection =
         context.db_connection()?;
@@ -165,7 +165,7 @@ fn process_invoice_command(
         );
     }
 
-    Err(Error::new(format!("subcommand not recognized")))
+    Err(dolmen::Error::new(format!("subcommand not recognized")))
 }
 
 /// A LaTeX preamble element to create a new command. This is used to pass
@@ -191,7 +191,7 @@ fn create_invoice(
     db_connection: &mut DbConnection,
     out_path: PathBuf,
     invoice_row_id: RowId,
-) -> Result<()> {
+) -> dolmen::Result<()> {
     // generate the LaTeX document
     let doc =
         generate_latex(db_connection, invoice_row_id)?;
@@ -215,7 +215,7 @@ fn create_invoice(
 fn generate_latex(
     db_connection: &mut DbConnection,
     invoice_row_id: RowId,
-) -> Result<Document> {
+) -> dolmen::Result<Document> {
     // get the relevant rows from the database
     let invoice = Invoice::from_table_row(
         db_connection,
@@ -367,7 +367,7 @@ impl TabImpl for ExportInvoiceTabImpl {
 
     }
 
-    fn handle_text(_: &mut framework::context::Context, _: ratatui::crossterm::event::Event, _: usize) {
+    fn handle_text(_: &mut Context, _: ratatui::crossterm::event::Event, _: usize) {
 
     }
 }
@@ -375,12 +375,13 @@ impl TabImpl for ExportInvoiceTabImpl {
 #[cfg(test)]
 mod test {
     use crate::InvoicePlugin;
+    use dolmen::prelude::*;
     use framework::prelude::*;
     use training::TrainingPlugin;
 
     fn setup_invoice_data(
         db_connection: &mut DbConnection,
-    ) -> Result<RowId> {
+    ) -> dolmen::Result<RowId> {
         // TODO: setting each field like this is super verbose and not
         // typesafe, this should be wrapped
         let client = db_connection
@@ -488,13 +489,13 @@ mod test {
     }
 
     #[test]
-    fn invoice_generate_test() -> Result<()> {
+    fn invoice_generate_test() -> dolmen::Result<()> {
         let mut context = Context::new();
         context
             .add_plugin(DbPlugin)?
             .add_plugin(InvoicePlugin)?
             .add_plugin(TrainingPlugin)?;
-        context.in_memory_db(true);
+        context.get_resource_mut::<DbConfig>().unwrap().open_db_in_memory = true;
 
         context.startup()?;
         let db_connection = context.db_connection()?;
@@ -514,7 +515,7 @@ mod test {
         let out_path = std::env::temp_dir()
             .join("training_assistant_test");
 
-        std::fs::create_dir_all(out_path.clone())?;
+        std::fs::create_dir_all(out_path.clone()).unwrap();
 
         documents::write_document(
             out_path.as_path(),
@@ -525,21 +526,21 @@ mod test {
 
         assert!(std::fs::exists(
             out_path.join("invoice.pdf")
-        )?);
+        ).unwrap());
 
-        std::fs::remove_dir_all(out_path)?;
+        std::fs::remove_dir_all(out_path).unwrap();
 
         Ok(())
     }
 
     #[test]
-    fn test_billing_commands() -> Result<()> {
+    fn test_billing_commands() -> dolmen::Result<()> {
         let mut context = Context::new();
         context
             .add_plugin(DbPlugin)?
             .add_plugin(InvoicePlugin)?
             .add_plugin(TrainingPlugin)?;
-        context.in_memory_db(true);
+        context.get_resource_mut::<DbConfig>().unwrap().open_db_in_memory = true;
 
         context.startup()?;
 
@@ -556,7 +557,7 @@ mod test {
         let out_path = std::env::temp_dir();
         println!("{:?}", out_path);
 
-        std::fs::create_dir_all(out_path.clone())?;
+        std::fs::create_dir_all(out_path.clone()).unwrap();
 
         documents::write_document(
             out_path.as_path(),

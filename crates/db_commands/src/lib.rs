@@ -1,4 +1,5 @@
 //! A plugin that adds a set of commands for editing the database.
+use dolmen::prelude::*;
 use framework::prelude::*;
 use clap::{Command, Arg, ArgMatches};
 use tui::prelude::*;
@@ -26,7 +27,7 @@ pub struct DbCommandsPlugin;
 // PRIVATE IMPLEMENTATION
 ///////////////////////////////////////////////////////////////////////////////
 impl Plugin for DbCommandsPlugin {
-    fn build(self, context: &mut Context) -> Result<()> {        
+    fn build(self, context: &mut Context) -> dolmen::Result<()> {        
         context
             .add_command(Command::new("new")
                 .about("Add a new row to a table")
@@ -141,7 +142,7 @@ impl Plugin for DbCommandsPlugin {
 fn process_new_command(
     context: &mut Context,
     arg_matches: &ArgMatches, 
-) -> Result<CommandResponse> {
+) -> dolmen::Result<CommandResponse> {
     let db_connection = context.db_connection()?;
     let table: &String = arg_matches
         .get_one::<String>("table")
@@ -158,7 +159,7 @@ fn process_new_command(
 fn process_set_command(
     context: &mut Context,
     arg_matches: &ArgMatches,
-) -> Result<CommandResponse> {
+) -> dolmen::Result<CommandResponse> {
     let db_connection = context.db_connection()?;
     let table = arg_matches
         .get_one::<String>("table")
@@ -189,7 +190,7 @@ fn process_set_command(
 fn process_list_command(
     context: &mut Context,
     arg_matches: &ArgMatches,
-) -> Result<CommandResponse> {
+) -> dolmen::Result<CommandResponse> {
     let db_connection = context.db_connection()?;
     let table = arg_matches
         .get_one::<String>("table")
@@ -203,7 +204,7 @@ fn process_list_command(
         format!("No entries in table {}.", table)
     } else {
         let Some(table_config) = db_connection.tables().iter().find(|t| t.table_name == *table) else {
-            return Err(Error::new(format!("table does not exist: {}", table)));
+            return Err(dolmen::Error::new(format!("table does not exist: {}", table)));
         };
 
         let mut tabled_builder = TabledBuilder::default();
@@ -219,7 +220,7 @@ fn process_list_command(
 fn process_remove_command(
     context: &mut Context,
     arg_matches: &ArgMatches,
-) -> Result<CommandResponse> {
+) -> dolmen::Result<CommandResponse> {
     let db_connection = context.db_connection()?;
     let table = arg_matches
         .get_one::<String>("table")
@@ -241,7 +242,7 @@ fn process_remove_command(
 fn process_db_command(
     context: &mut Context,
     matches: &ArgMatches,
-) -> Result<CommandResponse> {
+) -> dolmen::Result<CommandResponse> {
     match matches.subcommand() {
         Some(("info", _)) => {
             let db_connection = context.db_connection()?;
@@ -276,7 +277,7 @@ fn db_info_text(db_connection: &mut DbConnection) -> String {
     response_text
 }
 
-fn process_db_info_command(db_connection: &mut DbConnection) -> Result<CommandResponse> {
+fn process_db_info_command(db_connection: &mut DbConnection) -> dolmen::Result<CommandResponse> {
     let response_text = db_info_text(db_connection); 
 
     Ok(CommandResponse::new(response_text))
@@ -284,7 +285,7 @@ fn process_db_info_command(db_connection: &mut DbConnection) -> Result<CommandRe
 
 fn erase_db(
     db_connection: &mut DbConnection,
-) -> Result<CommandResponse> {
+) -> dolmen::Result<CommandResponse> {
     db_connection.delete_db()?;
     Ok(CommandResponse::default())
 }
@@ -319,7 +320,7 @@ impl TabImpl for DbInfoTabImpl {
 
     }
 
-    fn handle_text(_: &mut framework::context::Context, _: ratatui::crossterm::event::Event, _: usize) {
+    fn handle_text(_: &mut Context, _: ratatui::crossterm::event::Event, _: usize) {
 
     }
 }
@@ -496,7 +497,7 @@ impl TabImpl for EditTabImpl {
         }
     }
 
-    fn handle_text(context: &mut framework::context::Context, ev: ratatui::crossterm::event::Event, tab_id: usize) {
+    fn handle_text(context: &mut Context, ev: ratatui::crossterm::event::Event, tab_id: usize) {
         match ev.clone().into() {
             Input { key: tui_textarea::Key::Esc, .. } => {
                 context.get_resource_mut::<Tui>().unwrap().set_input_mode(tui::TuiInputMode::Bind);
@@ -508,26 +509,26 @@ impl TabImpl for EditTabImpl {
     }
 }
 
-fn on_select_cell(context: &mut Context, tab_id: usize) -> Result<()> {
+fn on_select_cell(context: &mut Context, tab_id: usize) -> dolmen::Result<()> {
     let table_name = context.tab_state::<EditTabState>(tab_id)?
-        .table_name.clone().ok_or(Error::new("not editing table"))?;
-    let table_config = context.db_connection()?.tables().iter().find(|t| t.table_name == table_name).ok_or(Error::new("couldn't find table config"))?;
+        .table_name.clone().ok_or(dolmen::Error::new("not editing table"))?;
+    let table_config = context.db_connection()?.tables().iter().find(|t| t.table_name == table_name).ok_or(dolmen::Error::new("couldn't find table config"))?;
     let field_types = (table_config.field_types_fn)();
-    let selected_cell = context.tab_state::<EditTabState>(tab_id)?.table_state.as_ref().ok_or(Error::new("couldn't get table state"))?
-        .selected_cell().ok_or(Error::new("couldn't get selected cell"))?;
-    let field_type_id = field_types.get(selected_cell.1).ok_or(Error::new(format!("couldn't get field type id, field_types: {:?}", field_types)))?.type_id;
+    let selected_cell = context.tab_state::<EditTabState>(tab_id)?.table_state.as_ref().ok_or(dolmen::Error::new("couldn't get table state"))?
+        .selected_cell().ok_or(dolmen::Error::new("couldn't get selected cell"))?;
+    let field_type_id = field_types.get(selected_cell.1).ok_or(dolmen::Error::new(format!("couldn't get field type id, field_types: {:?}", field_types)))?.type_id;
     if field_type_id != std::any::TypeId::of::<String>() {
-        return Err(Error::new("can't edit field type"));
+        return Err(dolmen::Error::new("can't edit field type"));
     }
     if let Some(table_state) = &mut context.tab_state_mut::<EditTabState>(tab_id)?.table_state {
         context.tab_state_mut::<EditTabState>(tab_id)?.edit_cell = table_state.selected_cell();
         context.tab_state_mut::<EditTabState>(tab_id)?.text_area = Some(tui_textarea::TextArea::default());
-        context.get_resource_mut::<Tui>().ok_or(Error::default())?.set_input_mode(tui::TuiInputMode::Text);
+        context.get_resource_mut::<Tui>().ok_or(dolmen::Error::default())?.set_input_mode(tui::TuiInputMode::Text);
     }
     Ok(())
 }
 
-fn render_table_view(context: &mut Context, tab_id: usize, block: Block, rect: Rect, buffer: &mut Buffer) -> Result<()> {
+fn render_table_view(context: &mut Context, tab_id: usize, block: Block, rect: Rect, buffer: &mut Buffer) -> dolmen::Result<()> {
     // TODO: dejank this
     let table_name = context.tab_state::<EditTabState>(tab_id)?.table_name.clone().unwrap();
     // TODO: get rid of this unwrap

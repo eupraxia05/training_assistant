@@ -1,11 +1,12 @@
 //! The GUI application for Training Assistant.
 
+use dolmen::prelude::*;
 use framework::prelude::*;
 use gui::prelude::*;
 use db_commands::DbCommandsPlugin;
 use billing::InvoicePlugin;
 
-fn main() -> Result<()> {
+fn main() -> dolmen::Result<()> {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([320.0, 240.0]),

@@ -1,8 +1,9 @@
 //! The command-line interface for Training Assistant.
+use dolmen::prelude::*;
 use framework::prelude::*;
 use tui::Tui;
 
-fn main() -> Result<()> {
+fn main() -> dolmen::Result<()> {
     let mut context = Context::new();
     context.add_plugin(DbPlugin)?;
 

@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+dolmen = { version = "0.1.0", path = "../dolmen" }
 egui = "0.33.3"
 framework = { version = "0.1.0", path = "../framework" }
 

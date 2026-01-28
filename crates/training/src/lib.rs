@@ -1,5 +1,5 @@
 //! A core plugin for training administration.
-
+use dolmen::prelude::*;
 use framework::prelude::*;
 use framework_derive_macros::TableRow;
 use tui::prelude::*;
@@ -11,7 +11,7 @@ use chrono::NaiveDate;
 pub struct TrainingPlugin;
 
 impl Plugin for TrainingPlugin {
-    fn build(self, context: &mut Context) -> Result<()> {
+    fn build(self, context: &mut Context) -> dolmen::Result<()> {
         context.add_table(TableConfig::new::<Trainer>("trainer"))
             .add_table(TableConfig::new::<Client>("client"))
             .add_table(TableConfig::new::<Exercise>("exercise"))
@@ -112,7 +112,7 @@ impl TabImpl for ScheduleTabImpl {
 
     }
 
-    fn handle_text(_: &mut framework::context::Context, _: ratatui::crossterm::event::Event, _: usize) {
+    fn handle_text(_: &mut Context, _: ratatui::crossterm::event::Event, _: usize) {
 
     }
 }

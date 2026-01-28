@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 chrono = "0.4.42"
+dolmen = { version = "0.1.0", path = "../dolmen" }
 framework = { version = "0.1.0", path = "../framework" }
 framework_derive_macros = { version = "0.1.0", path = "../framework_derive_macros" }
 ratatui = "0.29.0"

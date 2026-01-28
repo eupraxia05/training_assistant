@@ -1,8 +1,8 @@
 //! A common terminal UI implementation.
-use framework::prelude::*;
+use dolmen::prelude::*;
 use std::any::Any;
 use ratatui::layout::{Rect, Layout, Constraint};
-use ratatui::crossterm::event::{Event, KeyModifiers, KeyEventKind, KeyCode};
+use ratatui::crossterm::event::{KeyModifiers, KeyCode};
 use ratatui::style::{Stylize, Style, Color, palette::tailwind};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Paragraph, StatefulWidget, HighlightSpacing, Borders, Tabs, Widget, List, ListState};
@@ -16,7 +16,7 @@ use std::collections::HashMap;
 pub struct TuiPlugin;
 
 impl Plugin for TuiPlugin {
-    fn build(self, context: &mut Context) -> Result<()> {
+    fn build(self, context: &mut Context) -> dolmen::Result<()> {
         context.add_resource(TuiNewTabTypes::default());
         context.add_command(
             Command::new("tui")
@@ -365,7 +365,7 @@ pub fn run_tui(context: &mut Context) -> std::result::Result<(), ()> {
     let result = loop {
         draw_tui(context, &mut terminal)?;
         let ev = ratatui::crossterm::event::read().map_err(|_| ())?;
-        handle_event(context, ev);
+        handle_event(context, ev).expect("couldn't handle event!");
         if context.get_resource_mut::<Tui>().unwrap().should_quit() {
             break Ok(());
         }
@@ -461,8 +461,8 @@ fn event_to_key_bind(ev: ratatui::crossterm::event::Event, keybinds: &Vec<KeyBin
     keybinds.iter().find(|k| key_code == k.key_code && modifiers == k.modifiers)
 }
 
-fn handle_event(context: &mut Context, ev: ratatui::crossterm::event::Event) -> Result<()> {
-    if context.get_resource::<Tui>().ok_or(Error::default())?.input_mode == TuiInputMode::Bind {
+fn handle_event(context: &mut Context, ev: ratatui::crossterm::event::Event) -> dolmen::Result<()> {
+    if context.get_resource::<Tui>().ok_or(dolmen::Error::default())?.input_mode == TuiInputMode::Bind {
         handle_key_binds(context, ev);
     } else {
         handle_text_input(context, ev);
@@ -515,7 +515,7 @@ fn handle_text_input(context: &mut Context, ev: ratatui::crossterm::event::Event
    (funcs.handle_text_fn)(context, ev, selected_tab);
 }
 
-fn process_tui_command(context: &mut Context, _: &ArgMatches) -> Result<CommandResponse> {
+fn process_tui_command(context: &mut Context, _: &ArgMatches) -> dolmen::Result<CommandResponse> {
     context.add_resource(Tui::default());
     Tui::add_tab(Tab::new_empty(), context);
     Ok(CommandResponse::new("Opening TUI session..."))
@@ -593,7 +593,7 @@ impl TabImpl for EmptyTabImpl {
         }
     }
 
-    fn handle_text(_: &mut framework::context::Context, _: ratatui::crossterm::event::Event, _: usize) {
+    fn handle_text(_: &mut Context, _: ratatui::crossterm::event::Event, _: usize) {
 
     }
 }
@@ -644,7 +644,7 @@ impl TabImpl for AboutTabImpl {
 
     }
 
-    fn handle_text(_: &mut framework::context::Context, _: ratatui::crossterm::event::Event, _: usize) {
+    fn handle_text(_: &mut Context, _: ratatui::crossterm::event::Event, _: usize) {
 
     }
 }
@@ -654,42 +654,42 @@ pub trait TuiContextExt {
     /// Gets the tab state corresponding to the given tab ID, if it exists.
     /// 
     /// * `tab_id` - The ID of the tab state to get.
-    fn tab_state<S>(&self, tab_id: usize) -> Result<&S>
+    fn tab_state<S>(&self, tab_id: usize) -> dolmen::Result<&S>
         where S: Default + 'static;
     
     /// Gets the mutable tab statee corresponding to the given tab ID, if it exists.
     ///
     /// * `tab_id` - The ID of the tab state to get.
-    fn tab_state_mut<S>(&mut self, tab_id: usize) -> Result<&mut S>
+    fn tab_state_mut<S>(&mut self, tab_id: usize) -> dolmen::Result<&mut S>
         where S: Default + 'static;
 }
 
 impl TuiContextExt for Context {
-    fn tab_state<S>(&self, tab_idx: usize) -> Result<&S> 
+    fn tab_state<S>(&self, tab_idx: usize) -> dolmen::Result<&S> 
         where S: Default + 'static
     {
         if let Some(tab_states) = self.get_resource::<TabState<S>>() {
             if let Some(tab_state) = tab_states.get_state(tab_idx) {
                 Ok(tab_state)
             } else {
-                Err(Error::new("tab state not found for tab"))
+                Err(dolmen::Error::new("tab state not found for tab"))
             }
         } else {
-            Err(Error::new("tab state not found for type"))
+            Err(dolmen::Error::new("tab state not found for type"))
         }
     }
     
-    fn tab_state_mut<S>(&mut self, tab_idx: usize) -> Result<&mut S> 
+    fn tab_state_mut<S>(&mut self, tab_idx: usize) -> dolmen::Result<&mut S> 
         where S: Default + 'static
     {
         if let Some(tab_states) = self.get_resource_mut::<TabState<S>>() {
             if let Some(tab_state) = tab_states.get_state_mut(tab_idx) {
                 Ok(tab_state)
             } else {
-                Err(Error::new("tab state not found for tab"))
+                Err(dolmen::Error::new("tab state not found for tab"))
             }
         } else {
-            Err(Error::new("tab state not found for type"))
+            Err(dolmen::Error::new("tab state not found for type"))
         }
     }
 }
@@ -711,11 +711,11 @@ pub mod prelude {
 
 #[cfg(test)]
 mod test {
-    use framework::prelude::*;
+    use dolmen::prelude::*;
     use crate::prelude::*;
 
     #[test]
-    fn tui_test_1() -> Result<()> {
+    fn tui_test_1() -> dolmen::Result<()> {
         let mut context = Context::new();
         context.add_plugin(TuiPlugin)?;
         context.startup()?;
@@ -736,7 +736,7 @@ mod test {
                state: ratatui::crossterm::event::KeyEventState::empty(),
                modifiers: ratatui::crossterm::event::KeyModifiers::CONTROL
             })
-        );
+        )?;
         crate::draw_tui(&mut context, &mut terminal).unwrap(); 
         insta::assert_snapshot!(terminal.backend());
         // request quit
@@ -747,7 +747,7 @@ mod test {
                state: ratatui::crossterm::event::KeyEventState::empty(),
                modifiers: ratatui::crossterm::event::KeyModifiers::NONE
             })
-        );
+        )?;
         assert!(context.get_resource::<Tui>().unwrap().should_quit());
         Ok(())
     }

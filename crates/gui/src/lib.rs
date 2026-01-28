@@ -1,5 +1,5 @@
 //! A GUI frontend implementation for Training Assistant.
-use framework::prelude::*;
+use dolmen::prelude::*;
 use std::any::Any;
 
 /// A plugin for GUI utilities.
@@ -7,7 +7,7 @@ use std::any::Any;
 pub struct GuiPlugin;
 
 impl Plugin for GuiPlugin {
-    fn build(self, context: &mut Context) -> Result<()> {
+    fn build(self, context: &mut Context) -> dolmen::Result<()> {
         if !context.has_resource::<GuiNewWindowTypes>() {
             context.add_resource(GuiNewWindowTypes::default());
         }

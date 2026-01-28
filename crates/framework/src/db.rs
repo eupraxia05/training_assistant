@@ -1,7 +1,5 @@
-use crate::{
-    Error, Result,
-    context::{Context, Plugin, Resource},
-};
+use crate::{Error, Result};
+use dolmen::prelude::*;
 use rusqlite::{
     Connection, ToSql, params, types::FromSql,
 };
@@ -472,13 +470,37 @@ impl DbContextExt for Context {
     }
 }
 
+#[derive(Default)]
+pub struct DbConfig {
+    pub open_db_in_memory: bool
+}
+
+impl Resource for DbConfig {
+    fn as_any(&self) -> &dyn Any { self }
+    fn as_any_mut(&mut self) -> &mut dyn Any { self }
+}
+
 //////////////////////////////////////////////////////
 // PRIVATE IMPLEMENTATION
 //////////////////////////////////////////////////////
 
 // TODO: is this plugin needed?
 impl Plugin for DbPlugin {
-    fn build(self, _: &mut Context) -> Result<()> {
+    fn build(self, context: &mut Context) -> dolmen::Result<()> {
+        context.add_resource(DbConfig::default());
+        Ok(())
+    }
+
+    fn startup(context: &mut Context) -> dolmen::Result<()> {
+        println!("asdf");
+        let db_connection = if context.get_resource::<DbConfig>().ok_or(dolmen::Error::default())?.open_db_in_memory {
+            DbConnection::open_test(context).map_err(|e| dolmen::Error::new(e.message.unwrap_or_default()))
+        } else {
+            DbConnection::open_default(context).map_err(|e| dolmen::Error::new(e.message.unwrap_or_default()))
+        }?;
+
+        context.add_resource(db_connection);
+
         Ok(())
     }
 }
@@ -766,7 +788,9 @@ impl FromSql for RowId {
 
 #[cfg(test)]
 mod test {
+    use dolmen::prelude::*;
     use crate::prelude::*;
+    use crate::{Result, Error};
     use framework_derive_macros::TableRow;
     extern crate self as framework;
 
@@ -774,7 +798,7 @@ mod test {
     struct TestPlugin;
 
     impl Plugin for TestPlugin {
-        fn build(self, context: &mut Context) -> Result<()> {
+        fn build(self, context: &mut Context) -> dolmen::Result<()> {
             context.add_table(TableConfig::new::<TestTableRow>("foo"));
             Ok(())
         }
@@ -790,7 +814,8 @@ mod test {
         // create a context and add our test plugin
         let mut context = Context::new();
         context.add_plugin(TestPlugin)?;
-        context.in_memory_db(true);
+        context.add_plugin(DbPlugin)?;
+        context.get_resource_mut::<DbConfig>().ok_or(Error::default())?.open_db_in_memory = true;
 
         context.startup()?;
 
