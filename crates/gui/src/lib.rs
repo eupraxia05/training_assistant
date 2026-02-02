@@ -17,7 +17,7 @@ impl Plugin for GuiPlugin {
 
 /// A resource that stores the window types that can be created in
 /// the Window menu.
-#[derive(Default)]
+#[derive(Resource, Default)]
 pub struct GuiNewWindowTypes {
     types: Vec<GuiNewWindowType>
 }
@@ -45,16 +45,6 @@ impl GuiContextExt for Context {
                 name: name.into()
             });
         }
-    }
-}
-
-impl Resource for GuiNewWindowTypes {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
-    fn as_any_mut(&mut self) -> &mut dyn Any {
-        self
     }
 }
 

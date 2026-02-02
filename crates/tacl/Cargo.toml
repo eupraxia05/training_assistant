@@ -14,7 +14,7 @@ color-eyre = "0.6.5"
 training = { version = "0.1.0", path = "../training", optional = true }
 tui = { version = "0.1.0", path = "../tui", optional = true }
 db_commands = { path = "../db_commands", optional = true}
-dolmen = { version = "0.1.0", path = "../dolmen" }
+dolmen = { version = "0.0.1", git = "https://github.com/eupraxia05/dolmen.git" }
 
 [lints]
 workspace = true

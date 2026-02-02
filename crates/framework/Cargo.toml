@@ -8,7 +8,7 @@ chrono = "0.4.42"
 clap = "4.5.49"
 crossterm = "0.29.0"
 directories = "6.0.0"
-dolmen = { version = "0.1.0", path = "../dolmen" }
+dolmen = { version = "0.0.1", git = "https://github.com/eupraxia05/dolmen.git" }
 framework_derive_macros = { version = "0.1.0", path = "../framework_derive_macros" }
 ratatui = "0.29.0"
 rusqlite = "0.37.0"

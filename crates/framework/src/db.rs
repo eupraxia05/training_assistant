@@ -19,6 +19,7 @@ use std::any::Any;
 pub struct DbPlugin;
 
 /// A connection to the underlying SQLite database.
+#[derive(Resource)]
 pub struct DbConnection {
     // The rusqlite connection. None if it's closed
     // or not opened yet.
@@ -32,11 +33,6 @@ pub struct DbConnection {
     // TODO: this is duplicated between here and
     // Context
     tables: Vec<TableConfig>,
-}
-
-impl Resource for DbConnection {
-    fn as_any(&self) -> &dyn Any { self }
-    fn as_any_mut(&mut self) -> &mut dyn Any { self }
 }
 
 impl DbConnection {
@@ -423,15 +419,9 @@ pub type FieldTypesFn =
 pub type GetFieldsAsStringsFn = fn(&DbConnection, String, RowId) -> Vec<String>;
 
 /// A resource to hold the tables that should be requested on startup.
-#[derive(Default)]
+#[derive(Resource, Default)]
 pub struct DbTableConfigs {
     configs: Vec<TableConfig>
-}
-
-// TODO: autogenerate this
-impl Resource for DbTableConfigs {
-    fn as_any(&self) -> &dyn Any { self }
-    fn as_any_mut(&mut self) -> &mut dyn Any { self }
 }
 
 impl DbTableConfigs {
@@ -470,14 +460,9 @@ impl DbContextExt for Context {
     }
 }
 
-#[derive(Default)]
+#[derive(Resource, Default)]
 pub struct DbConfig {
     pub open_db_in_memory: bool
-}
-
-impl Resource for DbConfig {
-    fn as_any(&self) -> &dyn Any { self }
-    fn as_any_mut(&mut self) -> &mut dyn Any { self }
 }
 
 //////////////////////////////////////////////////////

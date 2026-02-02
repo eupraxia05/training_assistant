@@ -29,7 +29,7 @@ impl Plugin for TuiPlugin {
 }
 
 /// A `Resource` that stores information about the TUI state.
-#[derive(Default)]
+#[derive(Resource, Default)]
 pub struct Tui {
     quit_requested: bool,
     tabs: Vec<(usize, Tab)>,
@@ -92,16 +92,11 @@ impl Tui {
     }
 }
 
-#[derive(Default, Eq, PartialEq)]
+#[derive(Resource, Default, Eq, PartialEq)]
 pub enum TuiInputMode {
     #[default]
     Bind,
     Text
-}
-
-impl Resource for Tui {
-    fn as_any(&self) -> &dyn Any { self }
-    fn as_any_mut(&mut self) -> &mut dyn Any { self }
 }
 
 struct TuiNewTabType {
@@ -110,7 +105,7 @@ struct TuiNewTabType {
 }
 
 /// A resource storing the tab types that can be created in the new tab UI.
-#[derive(Default)]
+#[derive(Resource, Default)]
 pub struct TuiNewTabTypes {
     types: Vec<TuiNewTabType>
 }
@@ -127,11 +122,6 @@ impl TuiNewTabTypes {
             funcs: TabFuncs::new::<T>()
         });
     }
-}
-
-impl Resource for TuiNewTabTypes {
-    fn as_any(&self) -> &dyn Any { self }
-    fn as_any_mut(&mut self) -> &mut dyn Any { self }
 }
 
 /// A resource for storing an associated state for a tab.
@@ -598,6 +588,8 @@ impl TabImpl for EmptyTabImpl {
     }
 }
 
+// TODO: shouldn't be a resource now that we have TabState
+#[derive(Resource)]
 struct EmptyTabState {
     list_state: ListState    
 }
@@ -609,16 +601,6 @@ impl Default for EmptyTabState {
         Self {
             list_state
         }
-    }
-}
-
-impl Resource for EmptyTabState {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
-    fn as_any_mut(&mut self) -> &mut dyn Any {
-        self
     }
 }
 
