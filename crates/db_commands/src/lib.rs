@@ -336,6 +336,7 @@ struct EditTabState {
     edit_cell: Option<(usize, usize)>,
     display_err: Option<String>,
     text_area: Option<tui_textarea::TextArea<'static>>,
+    edit_field_name: Option<String>,
 }
 
 impl TabImpl for EditTabImpl {
@@ -501,6 +502,23 @@ impl TabImpl for EditTabImpl {
         match ev.clone().into() {
             Input { key: tui_textarea::Key::Esc, .. } => {
                 context.get_resource_mut::<Tui>().unwrap().set_input_mode(tui::TuiInputMode::Bind);
+                context.tab_state_mut::<EditTabState>(tab_id).unwrap().text_area = None;
+                context.tab_state_mut::<EditTabState>(tab_id).unwrap().edit_field_name = None;
+                context.tab_state_mut::<EditTabState>(tab_id).unwrap().edit_cell = None;
+            },
+            Input { key: tui_textarea::Key::Enter, ..} => {
+                println!("enter detected");
+                let state = context.tab_state::<EditTabState>(tab_id).unwrap();
+                let table_name = state.table_name.clone().unwrap();
+                let edit_cell = state.edit_cell.unwrap();
+                let edit_row = edit_cell.0;
+                let field_name = state.edit_field_name.clone().unwrap();
+                let text = state.text_area.clone().unwrap().into_lines()[0].clone();
+                context.db_connection().unwrap().set_field_in_table(table_name, RowId((edit_row + 1) as i64), field_name, text);
+                context.get_resource_mut::<Tui>().unwrap().set_input_mode(tui::TuiInputMode::Bind);
+                context.tab_state_mut::<EditTabState>(tab_id).unwrap().text_area = None;
+                context.tab_state_mut::<EditTabState>(tab_id).unwrap().edit_field_name = None;
+                context.tab_state_mut::<EditTabState>(tab_id).unwrap().edit_cell = None;
             },
             input => {
                 context.tab_state_mut::<EditTabState>(tab_id).unwrap().text_area.as_mut().unwrap().input(input); 
@@ -516,7 +534,10 @@ fn on_select_cell(context: &mut Context, tab_id: usize) -> dolmen::Result<()> {
     let field_types = (table_config.field_types_fn)();
     let selected_cell = context.tab_state::<EditTabState>(tab_id)?.table_state.as_ref().ok_or(dolmen::Error::new("couldn't get table state"))?
         .selected_cell().ok_or(dolmen::Error::new("couldn't get selected cell"))?;
-    let field_type_id = field_types.get(selected_cell.1).ok_or(dolmen::Error::new(format!("couldn't get field type id, field_types: {:?}", field_types)))?.type_id;
+    let field_type = field_types.get(selected_cell.1).ok_or(dolmen::Error::new(format!("couldn't get field type id, field_types: {:?}", field_types)))?;
+
+    let field_type_id = field_type.type_id;
+    context.tab_state_mut::<EditTabState>(tab_id).unwrap().edit_field_name = Some(field_type.name.clone());
     if field_type_id != std::any::TypeId::of::<String>() {
         return Err(dolmen::Error::new("can't edit field type"));
     }
