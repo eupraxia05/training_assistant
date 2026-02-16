@@ -178,7 +178,7 @@ impl DbConnection {
         field_name: impl Into<String>,
     ) -> Result<F>
     where
-        F: FromSql,
+        F: FromSql + Default,
     {
         let connection = self.get_connection_if_exists()?;
 
@@ -190,11 +190,9 @@ impl DbConnection {
             .as_str(),
         )?;
 
-        select
+        Ok(select
             .query_one([row_id.0], |t| t.get(0))
-            .map_err(|e| {
-                Error::new(e.to_string())
-            })
+            .unwrap_or_default())
     }
 
     /// Removes a row from a table. Returns `Ok` if the row was
@@ -737,7 +735,7 @@ impl TableField for chrono::NaiveDate {
 }
 
 impl<T> TableField for Option<T>
-    where T: FromSql + std::fmt::Debug
+    where T: FromSql + std::fmt::Debug + Default
 {
     fn sql_type() -> &'static str {
         "TEXT"

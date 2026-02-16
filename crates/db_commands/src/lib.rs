@@ -427,6 +427,13 @@ impl TabImpl for EditTabImpl {
                 key_code: KeyCode::Esc,
                 modifiers: KeyModifiers::NONE,
             },
+            KeyBind {
+                name: "new_row".into(),
+                display_key: "Ctrl+N".into(),
+                display_name: "New Row".into(),
+                key_code: KeyCode::Char('n'),
+                modifiers: KeyModifiers::CONTROL,
+            }
         ]
     }
     
@@ -494,6 +501,10 @@ impl TabImpl for EditTabImpl {
                     state.table_state = None;
                 }
             },
+            "new_row" => {
+                let table_name = context.tab_state::<EditTabState>(tab_id).unwrap().table_name.clone().unwrap();
+                context.db_connection().unwrap().new_row_in_table(table_name);
+            }
             _ => { }
         }
     }
