@@ -20,7 +20,7 @@ expression: rendered
 \newcommand{\paidvia}{Cash}
 \newcommand{\chargedata}{11/05/2025 & Personal training session (60 min) & 50 \\}
 \newcommand{\chargetotal}{50}
-\newcommand{\companyheader}{\Large\textbf{Tara Fitness}}
+\newcommand{\companyheader}{\includegraphics[width=256px]{}}
 \begin{document}
 \begin{tabular}{>{\centering\arraybackslash}m{10cm} >{\centering\arraybackslash}m{7cm}}
 	\companyheader

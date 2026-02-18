@@ -10,14 +10,14 @@ use latex::{
 use std::path::PathBuf;
 use training::{Client, Trainer};
 
-#[cfg(feature="tui")]
-use tui::{TabImpl, KeyBind};
+#[cfg(feature = "tui")]
+use tui::{KeyBind, TabImpl};
 
+use gui::prelude::*;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
-use ratatui::widgets::{Block, Paragraph, Widget};
 use ratatui::text::Line;
-use gui::prelude::*;
+use ratatui::widgets::{Block, Paragraph, Widget};
 
 ///////////////////////////////////////////////////////////////////////////////
 // PUBLIC API
@@ -66,20 +66,44 @@ pub struct Charge {
     /// (e.g. `"Personal training session (60 min)"`)
     pub description: String,
 
-    /// The amount charged, in dollars.
-    // TODO: allow for other non-Murican currencies
+    /// The amount charged.
+    // TODO: replace this with a proper currency field
     pub amount: i32,
+}
+
+#[derive(TableRow, Debug)]
+pub struct Payment {
+    pub date: String,
+
+    pub trainer: RowId,
+
+    pub client: RowId,
+
+    // TODO: replace this with a proper currency field
+    pub amount: u32,
+
+    pub paid_via: String,
 }
 
 ///////////////////////////////////////////////////////////////////////////////
 // PRIVATE IMPLEMENTATION
 ///////////////////////////////////////////////////////////////////////////////
 impl Plugin for InvoicePlugin {
-    fn build(self, context: &mut Context) -> dolmen::Result<()> {
+    fn build(
+        self,
+        context: &mut Context,
+    ) -> dolmen::Result<()> {
         // set up charge and invoice tables
         context
-            .add_table(TableConfig::new::<Charge>("charge"))
-            .add_table(TableConfig::new::<Invoice>("invoice"));
+            .add_table(TableConfig::new::<Charge>(
+                "charge",
+            ))
+            .add_table(TableConfig::new::<Invoice>(
+                "invoice",
+            ))
+            .add_table(TableConfig::new::<Payment>(
+                "payment",
+            ));
 
         // set up invoice command
         context
@@ -152,8 +176,7 @@ fn process_invoice_command(
     arg_matches: &ArgMatches,
 ) -> dolmen::Result<CommandResponse> {
     // get the database connection
-    let db_connection =
-        context.db_connection()?;
+    let db_connection = context.db_connection()?;
 
     // check for the generate subcommand and run it if desired
     if let Some(("generate", sub_m)) =
@@ -165,7 +188,9 @@ fn process_invoice_command(
         );
     }
 
-    Err(dolmen::Error::new(format!("subcommand not recognized")))
+    Err(dolmen::Error::new(format!(
+        "subcommand not recognized"
+    )))
 }
 
 /// A LaTeX preamble element to create a new command. This is used to pass
@@ -233,10 +258,19 @@ fn generate_latex(
         invoice.client,
     )?;
 
-    let charges = invoice.charges.iter().map(|c| {
-        // todo: get rid of this unwrap
-        Charge::from_table_row(db_connection, "charge".into(), *c).unwrap() 
-    }).collect::<Vec<_>>();
+    let charges = invoice
+        .charges
+        .iter()
+        .map(|c| {
+            // todo: get rid of this unwrap
+            Charge::from_table_row(
+                db_connection,
+                "charge".into(),
+                *c,
+            )
+            .unwrap()
+        })
+        .collect::<Vec<_>>();
 
     // Create the document and set up the preamble with all the needed data.
     let mut doc =
@@ -256,11 +290,11 @@ fn generate_latex(
     });
     doc.preamble.push(PreambleElement::UsePackage {
         package: "graphicx".into(),
-        argument: None
+        argument: None,
     });
     doc.preamble.push(PreambleElement::UsePackage {
         package: "array".into(),
-        argument: None
+        argument: None,
     });
     doc.preamble.push(NewCommand(
         "trainername".into(),
@@ -307,7 +341,15 @@ fn generate_latex(
     let mut charge_total = 0;
 
     for charge in charges {
-        charge_data.push_str(format!("{} & {} & {} \\\\", charge.date, charge.description, charge.amount).as_str());
+        charge_data.push_str(
+            format!(
+                "{} & {} & {} \\\\",
+                charge.date,
+                charge.description,
+                charge.amount
+            )
+            .as_str(),
+        );
         charge_total += charge.amount;
     }
 
@@ -321,15 +363,22 @@ fn generate_latex(
         format!("{}", charge_total),
     ));
 
-    let company_header = if let Some(logo_path) = trainer.logo_path() {
-        format!("\\includegraphics[width=256px]{{{}}}", logo_path)
-    } else {
-        format!("\\Large\\textbf{{{}}}", trainer.company_name())
-    };
+    let company_header =
+        if let Some(logo_path) = trainer.logo_path() {
+            format!(
+                "\\includegraphics[width=256px]{{{}}}",
+                logo_path
+            )
+        } else {
+            format!(
+                "\\Large\\textbf{{{}}}",
+                trainer.company_name()
+            )
+        };
     // TODO: get rid of this unwrap
     doc.preamble.push(NewCommand(
         "companyheader".into(),
-        company_header
+        company_header,
     ));
 
     // push the invoice template into the document now that all commands are
@@ -342,33 +391,47 @@ fn generate_latex(
 }
 
 // TODO: implement this
-#[cfg(feature="tui")]
+#[cfg(feature = "tui")]
 struct ExportInvoiceTabImpl;
 
-#[cfg(feature="tui")]
+#[cfg(feature = "tui")]
 #[derive(Default)]
 struct ExportInvoiceTabState;
 
-#[cfg(feature="tui")]
+#[cfg(feature = "tui")]
 impl TabImpl for ExportInvoiceTabImpl {
     type State = ExportInvoiceTabState;
 
-    fn title() -> String { "Export Invoice".into() }
+    fn title() -> String {
+        "Export Invoice".into()
+    }
 
-    fn render(_: &mut Context, buffer: &mut Buffer, rect: Rect, block: Block, _: usize) {
-        Paragraph::new(Line::from("Export Invoice not implemented.")).block(block).render(rect, buffer);
+    fn render(
+        _: &mut Context,
+        buffer: &mut Buffer,
+        rect: Rect,
+        block: Block,
+        _: usize,
+    ) {
+        Paragraph::new(Line::from(
+            "Export Invoice not implemented.",
+        ))
+        .block(block)
+        .render(rect, buffer);
     }
 
     fn keybinds() -> Vec<KeyBind> {
-        vec!()
+        vec![]
     }
 
     fn handle_key(_: &mut Context, _: &str, _: usize) {
-
     }
 
-    fn handle_text(_: &mut Context, _: ratatui::crossterm::event::Event, _: usize) {
-
+    fn handle_text(
+        _: &mut Context,
+        _: ratatui::crossterm::event::Event,
+        _: usize,
+    ) {
     }
 }
 
@@ -483,8 +546,6 @@ mod test {
             format!("{}", charge.0),
         )?;
 
-        
-
         Ok(invoice)
     }
 
@@ -495,7 +556,10 @@ mod test {
             .add_plugin(DbPlugin)?
             .add_plugin(InvoicePlugin)?
             .add_plugin(TrainingPlugin)?;
-        context.get_resource_mut::<DbConfig>().unwrap().open_db_in_memory = true;
+        context
+            .get_resource_mut::<DbConfig>()
+            .unwrap()
+            .open_db_in_memory = true;
 
         context.startup()?;
         let db_connection = context.db_connection()?;
@@ -515,7 +579,8 @@ mod test {
         let out_path = std::env::temp_dir()
             .join("training_assistant_test");
 
-        std::fs::create_dir_all(out_path.clone()).unwrap();
+        std::fs::create_dir_all(out_path.clone())
+            .unwrap();
 
         documents::write_document(
             out_path.as_path(),
@@ -524,9 +589,12 @@ mod test {
         )
         .expect("failed to write document");
 
-        assert!(std::fs::exists(
-            out_path.join("invoice.pdf")
-        ).unwrap());
+        assert!(
+            std::fs::exists(
+                out_path.join("invoice.pdf")
+            )
+            .unwrap()
+        );
 
         std::fs::remove_dir_all(out_path).unwrap();
 
@@ -540,7 +608,10 @@ mod test {
             .add_plugin(DbPlugin)?
             .add_plugin(InvoicePlugin)?
             .add_plugin(TrainingPlugin)?;
-        context.get_resource_mut::<DbConfig>().unwrap().open_db_in_memory = true;
+        context
+            .get_resource_mut::<DbConfig>()
+            .unwrap()
+            .open_db_in_memory = true;
 
         context.startup()?;
 
@@ -557,7 +628,8 @@ mod test {
         let out_path = std::env::temp_dir();
         println!("{:?}", out_path);
 
-        std::fs::create_dir_all(out_path.clone()).unwrap();
+        std::fs::create_dir_all(out_path.clone())
+            .unwrap();
 
         documents::write_document(
             out_path.as_path(),

@@ -3,17 +3,17 @@ use dolmen::prelude::*;
 use rusqlite::{
     Connection, ToSql, params, types::FromSql,
 };
+use std::any::Any;
+use std::fmt::{Display, Formatter};
 use std::fs;
 use std::path::PathBuf;
-use std::fmt::{Display, Formatter};
-use tabled::{builder::Builder as TabledBuilder};
-use std::any::Any;
+use tabled::builder::Builder as TabledBuilder;
 
 //////////////////////////////////////////////////////
 // PUBLIC API
 //////////////////////////////////////////////////////
 
-/// Add this plugin to a `Context` to add default 
+/// Add this plugin to a `Context` to add default
 /// tables and basic database editing commands.
 #[derive(Default, Clone)]
 pub struct DbPlugin;
@@ -41,16 +41,16 @@ impl DbConnection {
         self.connection.is_some()
     }
 
-    /// Gets the path of the database file opened 
+    /// Gets the path of the database file opened
     /// by this connection.
     pub fn db_path(&self) -> &Option<PathBuf> {
         &self.db_path
     }
 
-    /// Closes and deletes the database. Requires a 
-    /// currently open connection, and will close it 
-    /// before deleting the file. If this is an 
-    /// in-memory database connection without a file, 
+    /// Closes and deletes the database. Requires a
+    /// currently open connection, and will close it
+    /// before deleting the file. If this is an
+    /// in-memory database connection without a file,
     /// it will just close the connection.
     ///
     /// Returns `Ok` if the database was successfully
@@ -61,7 +61,9 @@ impl DbConnection {
         // we intend to consume the connection
         let Some(connection) = self.connection.take()
         else {
-            return Err(Error::new("no active db connection"));
+            return Err(Error::new(
+                "no active db connection",
+            ));
         };
 
         // close the connection
@@ -71,7 +73,10 @@ impl DbConnection {
         if let Some(db_path) = &self.db_path {
             std::fs::remove_file(db_path.clone())
                 .map_err(|e| {
-                    Error::new(format!("couldn't erase db file: {}", e.to_string()))
+                    Error::new(format!(
+                        "couldn't erase db file: {}",
+                        e.to_string()
+                    ))
                 })?;
             self.db_path = None;
         }
@@ -87,7 +92,8 @@ impl DbConnection {
         &mut self,
         table: impl Into<String>,
     ) -> Result<RowId> {
-        let connection = self.get_connection_if_exists()?;
+        let connection =
+            self.get_connection_if_exists()?;
 
         // execute the INSERT command with the given
         // table
@@ -128,7 +134,8 @@ impl DbConnection {
     where
         V: ToSql,
     {
-        let connection = self.get_connection_if_exists()?;
+        let connection =
+            self.get_connection_if_exists()?;
 
         connection.execute(
             format!(
@@ -150,7 +157,8 @@ impl DbConnection {
         &self,
         table: impl Into<String>,
     ) -> Result<Vec<i64>> {
-        let connection = self.get_connection_if_exists()?;
+        let connection =
+            self.get_connection_if_exists()?;
 
         let mut select = connection.prepare(
             format!("SELECT id FROM {}", table.into())
@@ -180,12 +188,14 @@ impl DbConnection {
     where
         F: FromSql + Default,
     {
-        let connection = self.get_connection_if_exists()?;
+        let connection =
+            self.get_connection_if_exists()?;
 
         let mut select = connection.prepare(
             format!(
                 "SELECT {} FROM {} WHERE id = ?1",
-                field_name.into(), table.into()
+                field_name.into(),
+                table.into()
             )
             .as_str(),
         )?;
@@ -205,7 +215,8 @@ impl DbConnection {
         table: impl Into<String>,
         row_id: RowId,
     ) -> Result<()> {
-        let connection = self.get_connection_if_exists()?;
+        let connection =
+            self.get_connection_if_exists()?;
 
         connection.execute(
             format!(
@@ -228,11 +239,16 @@ impl DbConnection {
 
 /// Used to identify a unique row in a table.
 // TODO: don't love that this implements Default, was necessary to implement FieldType
-#[derive(Copy, Clone, Debug, Eq, Default, PartialEq)]
+#[derive(
+    Copy, Clone, Debug, Eq, Default, PartialEq,
+)]
 pub struct RowId(pub i64);
 
 impl Display for RowId {
-    fn fmt(&self, f: &mut Formatter) -> std::result::Result<(), std::fmt::Error> {
+    fn fmt(
+        &self,
+        f: &mut Formatter,
+    ) -> std::result::Result<(), std::fmt::Error> {
         write!(f, "{}", self.0)?;
         Ok(())
     }
@@ -260,8 +276,8 @@ pub trait TableRow: Sized + std::fmt::Debug {
         table_name: String,
         row_id: RowId,
     ) -> Result<Self>;
-    
-/// Pushes a record into a `tabled::TableBuilder`
+
+    /// Pushes a record into a `tabled::TableBuilder`
     /// containing the names of each field.
     /// Called once at the beginning, then
     /// `push_tabled_record` is called for each
@@ -272,14 +288,23 @@ pub trait TableRow: Sized + std::fmt::Debug {
     /// containing the values of each field.
     /// Called for each row in a table, after
     /// `push_tabled_header`.
-    fn push_tabled_record(builder: &mut TabledBuilder, db_connection: &DbConnection, table_name: String, row_id: RowId);
+    fn push_tabled_record(
+        builder: &mut TabledBuilder,
+        db_connection: &DbConnection,
+        table_name: String,
+        row_id: RowId,
+    );
 
     /// Gets all the field names of this row type.
     // TODO: remove this in favor of field_types
     fn field_names() -> Vec<String>;
 
     /// Gets all the fields of a row from a table, as strings.
-    fn get_fields_as_strings(db_connection: &DbConnection, table_name: String, row_id: RowId) -> Vec<String>;
+    fn get_fields_as_strings(
+        db_connection: &DbConnection,
+        table_name: String,
+        row_id: RowId,
+    ) -> Vec<String>;
 
     fn field_types() -> Vec<FieldTypeInfo>;
 }
@@ -287,12 +312,12 @@ pub trait TableRow: Sized + std::fmt::Debug {
 #[derive(Debug)]
 pub struct FieldTypeInfo {
     pub name: String,
-    pub type_id: std::any::TypeId
+    pub type_id: std::any::TypeId,
 }
 
 impl FieldTypeInfo {
     pub fn name(&self) -> &String {
-       &self.name 
+        &self.name
     }
 
     pub fn type_id(&self) -> std::any::TypeId {
@@ -324,16 +349,19 @@ pub trait TableField {
     /// Formats a display string (for use in table output) from this field.
     ///
     /// * `args` - A struct of arguments used to format the display string.
-    fn to_display_string(&self, args: TableFieldDisplayStringArgs) -> String;
+    fn to_display_string(
+        &self,
+        args: TableFieldDisplayStringArgs,
+    ) -> String;
 }
 
 /// Arguments for `TableField::to_display_string`.
 pub struct TableFieldDisplayStringArgs<'a> {
     /// A connection to the database.
     pub db_connection: &'a DbConnection,
-    
+
     /// If applicable, a table and column to show for a RowId, instead of its numeric id.
-    pub display_table: Option<(String, String)>
+    pub display_table: Option<(String, String)>,
 }
 
 /// A configuration for a SQL table. Used when opening a
@@ -361,24 +389,30 @@ pub struct TableConfig {
     pub field_types_fn: FieldTypesFn,
 
     /// See `GetFieldsAsStringsFn`.
-    pub get_fields_as_strings_fn: GetFieldsAsStringsFn
+    pub get_fields_as_strings_fn: GetFieldsAsStringsFn,
 }
 
 impl TableConfig {
     /// Creates a new TableConfig with the given row type (`T`) and the given table name.
     ///
     /// * `table_name` - The name to give the table.
-    pub fn new<T>(table_name: impl Into<String>) -> Self
-        where T: TableRow 
+    pub fn new<T>(
+        table_name: impl Into<String>,
+    ) -> Self
+    where
+        T: TableRow,
     {
         Self {
             table_name: table_name.into(),
             setup_fn: T::setup,
-            push_tabled_header_fn: T::push_tabled_header,
-            push_tabled_record_fn: T::push_tabled_record,
+            push_tabled_header_fn:
+                T::push_tabled_header,
+            push_tabled_record_fn:
+                T::push_tabled_record,
             field_names_fn: T::field_names,
             field_types_fn: T::field_types,
-            get_fields_as_strings_fn: T::get_fields_as_strings,
+            get_fields_as_strings_fn:
+                T::get_fields_as_strings,
         }
     }
 }
@@ -393,33 +427,37 @@ pub type TableSetupFn =
 /// into a `tabled` builder. Generally points to
 /// the `TableRow::push_tabled_header` implementation
 /// for the row type.
-pub type PushTabledHeaderFn = fn (&mut TabledBuilder);
+pub type PushTabledHeaderFn = fn(&mut TabledBuilder);
 
 /// A pointer to a function used to push a record
 /// for a table row into a `tabled` builder. Generally
 /// points to the `TableRow::push_tabled_record`
 /// implementation for the row type.
-pub type PushTabledRecordFn = fn (&mut TabledBuilder, &DbConnection, String, RowId);
+pub type PushTabledRecordFn = fn(
+    &mut TabledBuilder,
+    &DbConnection,
+    String,
+    RowId,
+);
 
 /// A pointer to a function used to get the field names
 /// for a table's row type. Generally points to the
 /// `TableRow::field_names` implementation for the
 /// row type.
-pub type FieldNamesFn =
-    fn() -> Vec<String>;
+pub type FieldNamesFn = fn() -> Vec<String>;
 
-pub type FieldTypesFn =
-    fn() -> Vec<FieldTypeInfo>;
+pub type FieldTypesFn = fn() -> Vec<FieldTypeInfo>;
 
 /// A pointer to a function used to get the fields from a table row as strings.
 /// Generally points to the `TableRow::get_fields_as_strings` implementation for
 /// the row type.
-pub type GetFieldsAsStringsFn = fn(&DbConnection, String, RowId) -> Vec<String>;
+pub type GetFieldsAsStringsFn =
+    fn(&DbConnection, String, RowId) -> Vec<String>;
 
 /// A resource to hold the tables that should be requested on startup.
 #[derive(Resource, Default)]
 pub struct DbTableConfigs {
-    configs: Vec<TableConfig>
+    configs: Vec<TableConfig>,
 }
 
 impl DbTableConfigs {
@@ -431,27 +469,42 @@ impl DbTableConfigs {
 /// An extension to `Context` to add database functionality acessible directly from the context.
 pub trait DbContextExt {
     /// Gets the database connection from a `Context`, if it is active. Returns `Err` if not.
-    fn db_connection(&mut self) -> Result<&mut DbConnection>;
+    fn db_connection(
+        &mut self,
+    ) -> Result<&mut DbConnection>;
 
     /// Adds a new table configuration. Must be called before `Context::startup`.
     ///
     /// * `table` - The table configuration to add.
-    fn add_table(&mut self, table: TableConfig) -> &mut Context;
+    fn add_table(
+        &mut self,
+        table: TableConfig,
+    ) -> &mut Context;
 }
 
 impl DbContextExt for Context {
-    fn db_connection(&mut self) -> Result<&mut DbConnection> {
-        self.get_resource_mut::<DbConnection>().ok_or(Error::new("no active db connection"))
+    fn db_connection(
+        &mut self,
+    ) -> Result<&mut DbConnection> {
+        self.get_resource_mut::<DbConnection>().ok_or(
+            Error::new("no active db connection"),
+        )
     }
 
-    fn add_table(&mut self, table: TableConfig) -> &mut Context {
+    fn add_table(
+        &mut self,
+        table: TableConfig,
+    ) -> &mut Context {
         if !self.has_resource::<DbTableConfigs>() {
-            let mut configs = DbTableConfigs::default();
+            let mut configs =
+                DbTableConfigs::default();
             configs.add_table(table);
             self.add_resource(configs);
         } else {
             // this unwrap is safe, as we know this resource exists
-            self.get_resource_mut::<DbTableConfigs>().unwrap().add_table(table);
+            self.get_resource_mut::<DbTableConfigs>()
+                .unwrap()
+                .add_table(table);
         }
 
         self
@@ -460,7 +513,7 @@ impl DbContextExt for Context {
 
 #[derive(Resource, Default)]
 pub struct DbConfig {
-    pub open_db_in_memory: bool
+    pub open_db_in_memory: bool,
 }
 
 //////////////////////////////////////////////////////
@@ -469,17 +522,37 @@ pub struct DbConfig {
 
 // TODO: is this plugin needed?
 impl Plugin for DbPlugin {
-    fn build(self, context: &mut Context) -> dolmen::Result<()> {
+    fn build(
+        self,
+        context: &mut Context,
+    ) -> dolmen::Result<()> {
         context.add_resource(DbConfig::default());
         Ok(())
     }
 
-    fn startup(context: &mut Context) -> dolmen::Result<()> {
+    fn startup(
+        context: &mut Context,
+    ) -> dolmen::Result<()> {
         println!("asdf");
-        let db_connection = if context.get_resource::<DbConfig>().ok_or(dolmen::Error::default())?.open_db_in_memory {
-            DbConnection::open_test(context).map_err(|e| dolmen::Error::new(e.message.unwrap_or_default()))
+        let db_connection = if context
+            .get_resource::<DbConfig>()
+            .ok_or(dolmen::Error::default())?
+            .open_db_in_memory
+        {
+            DbConnection::open_test(context).map_err(
+                |e| {
+                    dolmen::Error::new(
+                        e.message.unwrap_or_default(),
+                    )
+                },
+            )
         } else {
-            DbConnection::open_default(context).map_err(|e| dolmen::Error::new(e.message.unwrap_or_default()))
+            DbConnection::open_default(context)
+                .map_err(|e| {
+                    dolmen::Error::new(
+                        e.message.unwrap_or_default(),
+                    )
+                })
         }?;
 
         context.add_resource(db_connection);
@@ -490,21 +563,29 @@ impl Plugin for DbPlugin {
 
 impl DbConnection {
     // opens a db connection at the default db path
-    pub(crate) fn open_default(context: &Context) -> Result<Self> {
+    pub(crate) fn open_default(
+        context: &Context,
+    ) -> Result<Self> {
         assert!(!cfg!(test));
         let db_path = Self::get_default_db_path()?;
-        let table_configs = match context.get_resource::<DbTableConfigs>() {
+        let table_configs = match context
+            .get_resource::<DbTableConfigs>()
+        {
             Some(t) => t.configs.clone(),
-            None => Vec::new()
+            None => Vec::new(),
         };
         Self::open_from_path(&db_path, table_configs)
     }
 
     // opens a db connection at a test db path
-    pub(crate) fn open_test(context: &Context) -> Result<Self> {
-        let table_configs = match context.get_resource::<DbTableConfigs>() {
+    pub(crate) fn open_test(
+        context: &Context,
+    ) -> Result<Self> {
+        let table_configs = match context
+            .get_resource::<DbTableConfigs>()
+        {
             Some(t) => t.configs.clone(),
-            None => Vec::new()
+            None => Vec::new(),
         };
         Self::open_in_memory(table_configs)
     }
@@ -542,7 +623,7 @@ impl DbConnection {
         Ok(Self {
             connection: Some(connection),
             db_path: None,
-            tables: table_configs
+            tables: table_configs,
         })
     }
 
@@ -551,10 +632,10 @@ impl DbConnection {
         path: &PathBuf,
         table_configs: Vec<TableConfig>,
     ) -> Result<Self> {
-        // create the directories leading to 
+        // create the directories leading to
         // the db path
         fs::create_dir_all(path.parent().unwrap())?;
-        
+
         // open the database connection
         let mut connection =
             Connection::open(path.clone())?;
@@ -569,7 +650,7 @@ impl DbConnection {
         Ok(DbConnection {
             connection: Some(connection),
             db_path: Some(path.clone()),
-            tables: table_configs
+            tables: table_configs,
         })
     }
 
@@ -586,7 +667,9 @@ impl DbConnection {
         Ok(())
     }
 
-    fn get_connection_if_exists(&self) -> Result<&Connection> {
+    fn get_connection_if_exists(
+        &self,
+    ) -> Result<&Connection> {
         if let Some(connection) = &self.connection {
             Ok(connection)
         } else {
@@ -610,7 +693,10 @@ impl TableField for String {
         )
     }
 
-    fn to_display_string(&self, _: TableFieldDisplayStringArgs) -> String {
+    fn to_display_string(
+        &self,
+        _: TableFieldDisplayStringArgs,
+    ) -> String {
         format!("{:?}", self)
     }
 }
@@ -629,7 +715,34 @@ impl TableField for i32 {
             table_name, row_id, field_name,
         )
     }
-    fn to_display_string(&self, _: TableFieldDisplayStringArgs) -> String {
+    fn to_display_string(
+        &self,
+        _: TableFieldDisplayStringArgs,
+    ) -> String {
+        format!("{:?}", self)
+    }
+}
+
+impl TableField for u32 {
+    fn sql_type() -> &'static str {
+        "INTEGER"
+    }
+
+    fn from_table_field(
+        db_connection: &DbConnection,
+        table_name: String,
+        row_id: RowId,
+        field_name: String,
+    ) -> Result<Self> {
+        db_connection.get_field_in_table_row::<u32>(
+            table_name, row_id, field_name,
+        )
+    }
+
+    fn to_display_string(
+        &self,
+        args: TableFieldDisplayStringArgs,
+    ) -> String {
         format!("{:?}", self)
     }
 }
@@ -648,7 +761,10 @@ impl TableField for i64 {
             table_name, row_id, field_name,
         )
     }
-    fn to_display_string(&self, _: TableFieldDisplayStringArgs) -> String {
+    fn to_display_string(
+        &self,
+        _: TableFieldDisplayStringArgs,
+    ) -> String {
         format!("{:?}", self)
     }
 }
@@ -670,13 +786,28 @@ impl TableField for RowId {
                 )?,
         ))
     }
-    fn to_display_string(&self, args: TableFieldDisplayStringArgs) -> String {
-        if let Some(display_table) = args.display_table {
-            let display_data = args.db_connection.get_field_in_table_row::<String>(display_table.0.clone(), *self, display_table.1.clone());
+    fn to_display_string(
+        &self,
+        args: TableFieldDisplayStringArgs,
+    ) -> String {
+        if let Some(display_table) = args.display_table
+        {
+            let display_data = args
+                .db_connection
+                .get_field_in_table_row::<String>(
+                display_table.0.clone(),
+                *self,
+                display_table.1.clone(),
+            );
             if let Ok(data) = display_data {
                 data
-            } else { 
-                format!("invalid row {}, column {:?} in table {:?}", self.0, display_table.1, display_table.0)
+            } else {
+                format!(
+                    "invalid row {}, column {:?} in table {:?}",
+                    self.0,
+                    display_table.1,
+                    display_table.0
+                )
             }
         } else {
             format!("{:?}", self)
@@ -705,7 +836,10 @@ impl TableField for Vec<RowId> {
         }
         Ok(vec)
     }
-    fn to_display_string(&self, _: TableFieldDisplayStringArgs) -> String {
+    fn to_display_string(
+        &self,
+        _: TableFieldDisplayStringArgs,
+    ) -> String {
         format!("{:?}", self)
     }
 }
@@ -720,22 +854,29 @@ impl TableField for chrono::NaiveDate {
         row_id: RowId,
         field_name: String,
     ) -> Result<Self> {
-        let s = db_connection.get_field_in_table_row::<String>(
-            table_name, row_id, field_name,
-        )?;
-        if let Ok(date) = s.parse::<chrono::NaiveDate>() {
+        let s = db_connection
+            .get_field_in_table_row::<String>(
+                table_name, row_id, field_name,
+            )?;
+        if let Ok(date) =
+            s.parse::<chrono::NaiveDate>()
+        {
             Ok(date)
         } else {
             Err(Error::new("failed to parse date"))
         }
     }
-    fn to_display_string(&self, _: TableFieldDisplayStringArgs) -> String {
+    fn to_display_string(
+        &self,
+        _: TableFieldDisplayStringArgs,
+    ) -> String {
         format!("{:?}", self)
     }
 }
 
 impl<T> TableField for Option<T>
-    where T: FromSql + std::fmt::Debug + Default
+where
+    T: FromSql + std::fmt::Debug + Default,
 {
     fn sql_type() -> &'static str {
         "TEXT"
@@ -747,21 +888,31 @@ impl<T> TableField for Option<T>
         row_id: RowId,
         field_name: String,
     ) -> Result<Self> {
-        let s = db_connection.get_field_in_table_row::<T>(table_name, row_id, field_name);
+        let s = db_connection
+            .get_field_in_table_row::<T>(
+                table_name, row_id, field_name,
+            );
         if let Ok(v) = s {
             Ok(Some(v))
         } else {
             Ok(None)
         }
     }
-    fn to_display_string(&self, _: TableFieldDisplayStringArgs) -> String {
+    fn to_display_string(
+        &self,
+        _: TableFieldDisplayStringArgs,
+    ) -> String {
         format!("{:?}", self)
     }
 }
 
 impl FromSql for RowId {
-    fn column_result(value: rusqlite::types::ValueRef) -> rusqlite::types::FromSqlResult<Self> {
-        if value.data_type() == rusqlite::types::Type::Integer {
+    fn column_result(
+        value: rusqlite::types::ValueRef,
+    ) -> rusqlite::types::FromSqlResult<Self> {
+        if value.data_type()
+            == rusqlite::types::Type::Integer
+        {
             Ok(RowId(value.as_i64().unwrap()))
         } else {
             Err(rusqlite::types::FromSqlError::InvalidType)
@@ -771,9 +922,9 @@ impl FromSql for RowId {
 
 #[cfg(test)]
 mod test {
-    use dolmen::prelude::*;
     use crate::prelude::*;
-    use crate::{Result, Error};
+    use crate::{Error, Result};
+    use dolmen::prelude::*;
     use framework_derive_macros::TableRow;
     extern crate self as framework;
 
@@ -781,8 +932,13 @@ mod test {
     struct TestPlugin;
 
     impl Plugin for TestPlugin {
-        fn build(self, context: &mut Context) -> dolmen::Result<()> {
-            context.add_table(TableConfig::new::<TestTableRow>("foo"));
+        fn build(
+            self,
+            context: &mut Context,
+        ) -> dolmen::Result<()> {
+            context.add_table(TableConfig::new::<
+                TestTableRow,
+            >("foo"));
             Ok(())
         }
     }
@@ -798,7 +954,10 @@ mod test {
         let mut context = Context::new();
         context.add_plugin(TestPlugin)?;
         context.add_plugin(DbPlugin)?;
-        context.get_resource_mut::<DbConfig>().ok_or(Error::default())?.open_db_in_memory = true;
+        context
+            .get_resource_mut::<DbConfig>()
+            .ok_or(Error::default())?
+            .open_db_in_memory = true;
 
         context.startup()?;
 
@@ -811,27 +970,35 @@ mod test {
 
         // test db connection shouldn't have a file path
         assert!(db_connection.db_path().is_none());
-        
+
         // test field type info
-        let field_types = (db_connection.tables.iter()
-            .find(|t| t.table_name == "foo").ok_or(Error::default())?
-            .field_types_fn)();
+        let field_types = (db_connection
+            .tables
+            .iter()
+            .find(|t| t.table_name == "foo")
+            .ok_or(Error::default())?
+            .field_types_fn)(
+        );
         assert_eq!(field_types.len(), 1);
         assert_eq!(field_types[0].name(), "bar");
-        assert_eq!(field_types[0].type_id(), std::any::TypeId::of::<String>());
+        assert_eq!(
+            field_types[0].type_id(),
+            std::any::TypeId::of::<String>()
+        );
 
-        // insert a row and check the inserted row is 
+        // insert a row and check the inserted row is
         // row 1
         // (the table was empty)
         let inserted_row =
             db_connection.new_row_in_table("foo")?;
         assert_eq!(inserted_row.0, 1);
-       
+
         // check the table row IDs returned are just
         // our newly created row
-        let table_row_ids = db_connection.get_table_row_ids("foo")?;
+        let table_row_ids =
+            db_connection.get_table_row_ids("foo")?;
         assert_eq!(table_row_ids, vec![1]);
-       
+
         // set a field in the created row
         db_connection.set_field_in_table(
             "foo",
@@ -841,11 +1008,12 @@ mod test {
         )?;
 
         // ensure the field matches
-        let field = db_connection.get_field_in_table_row::<String>(
-            "foo", 
-            inserted_row, 
-            "bar"
-        )?;
+        let field = db_connection
+            .get_field_in_table_row::<String>(
+                "foo",
+                inserted_row,
+                "bar",
+            )?;
         assert_eq!(field, "foobar");
 
         // get the table row and ensure the field matches
@@ -857,10 +1025,14 @@ mod test {
         assert_eq!(table_row.bar, "foobar");
 
         // delete the row
-        db_connection.remove_row_in_table("foo", inserted_row)?;
+        db_connection.remove_row_in_table(
+            "foo",
+            inserted_row,
+        )?;
 
         // ensure the table row IDs are empty
-        let table_row_ids_2 = db_connection.get_table_row_ids("foo")?;
+        let table_row_ids_2 =
+            db_connection.get_table_row_ids("foo")?;
         assert_eq!(table_row_ids_2.len(), 0);
 
         // delete the db. this one is in memory, so it
