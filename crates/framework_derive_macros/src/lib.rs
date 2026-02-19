@@ -61,8 +61,6 @@ fn generate_table_row_impl(
         = generate_table_row_from_table_row_fn_definition(parsed_fields);
     let tabled_fn_definitions 
         = generate_tabled_fn_definitions(parsed_fields);
-    let field_names_fn_definition 
-        = generate_field_names_fn_definition(parsed_fields);
     let field_types_fn_definition 
         = generate_field_types_fn_definition(parsed_fields);
     let get_fields_as_strings_fn_definition 
@@ -77,8 +75,6 @@ fn generate_table_row_impl(
             #from_table_row_fn_definition
 
             #tabled_fn_definitions
-
-            #field_names_fn_definition
 
             #field_types_fn_definition
 
@@ -209,23 +205,6 @@ fn generate_tabled_fn_definitions(fields: &venial::NamedFields)
             };
             println!("{:?}", record);
             builder.push_record([row_id.0.to_string(), #record_fields_args]);
-        }
-    )
-}
-
-fn generate_field_names_fn_definition(fields: &venial::NamedFields) 
-    -> proc_macro2::TokenStream 
-{
-    let mut field_names = proc_macro2::TokenStream::new();
-
-    for(field, _) in fields.fields.iter() {
-        field_names.extend(format!("\"{}\".to_string(), ", 
-            field.name.to_string()).parse::<proc_macro2::TokenStream>());
-    }
-
-    quote::quote!(
-        fn field_names() -> Vec<String> {
-            vec![#field_names]
         }
     )
 }

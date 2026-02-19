@@ -3,7 +3,6 @@ use dolmen::prelude::*;
 use rusqlite::{
     Connection, ToSql, params, types::FromSql,
 };
-use std::any::Any;
 use std::fmt::{Display, Formatter};
 use std::fs;
 use std::path::PathBuf;
@@ -295,10 +294,6 @@ pub trait TableRow: Sized + std::fmt::Debug {
         row_id: RowId,
     );
 
-    /// Gets all the field names of this row type.
-    // TODO: remove this in favor of field_types
-    fn field_names() -> Vec<String>;
-
     /// Gets all the fields of a row from a table, as strings.
     fn get_fields_as_strings(
         db_connection: &DbConnection,
@@ -383,9 +378,6 @@ pub struct TableConfig {
     /// See `PushTabledRecordFn`.
     pub push_tabled_record_fn: PushTabledRecordFn,
 
-    /// See `FieldNamesFn`.
-    pub field_names_fn: FieldNamesFn,
-
     pub field_types_fn: FieldTypesFn,
 
     /// See `GetFieldsAsStringsFn`.
@@ -409,7 +401,6 @@ impl TableConfig {
                 T::push_tabled_header,
             push_tabled_record_fn:
                 T::push_tabled_record,
-            field_names_fn: T::field_names,
             field_types_fn: T::field_types,
             get_fields_as_strings_fn:
                 T::get_fields_as_strings,

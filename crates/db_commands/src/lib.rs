@@ -892,7 +892,6 @@ fn render_table_view(
         .iter()
         .find(|t| t.table_name == table_name)
         .unwrap();
-    let field_names = (table_config.field_names_fn)();
 
     // TODO: remove this unwrap
     let row_ids = db_connection
@@ -909,6 +908,13 @@ fn render_table_view(
             RowId(*row),
         )));
     }
+
+    let field_types = (table_config.field_types_fn)();
+
+    let field_names = field_types
+        .iter()
+        .map(|f| f.name().clone())
+        .collect::<Vec<_>>();
 
     let widths = field_names.iter().map(|f| {
         Constraint::Min(f.len().try_into().unwrap())
