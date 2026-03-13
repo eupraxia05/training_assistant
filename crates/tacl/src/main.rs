@@ -7,17 +7,18 @@ fn main() -> dolmen::Result<()> {
     let mut context = Context::new();
     context.add_plugin(DbPlugin)?;
 
-    #[cfg(feature="tui")]
+    #[cfg(feature = "tui")]
     context.add_plugin(tui::TuiPlugin)?;
 
-    #[cfg(feature="billing")]
-    context.add_plugin(billing::InvoicePlugin)?;
+    #[cfg(feature = "billing")]
+    context.add_plugin(billing::BillingPlugin)?;
 
-    #[cfg(feature="training")]
+    #[cfg(feature = "training")]
     context.add_plugin(training::TrainingPlugin)?;
 
-    #[cfg(feature="db_commands")]
-    context.add_plugin(db_commands::DbCommandsPlugin)?;
+    #[cfg(feature = "db_commands")]
+    context
+        .add_plugin(db_commands::DbCommandsPlugin)?;
 
     context.startup()?;
 
@@ -28,28 +29,28 @@ fn main() -> dolmen::Result<()> {
     // TODO: this isn't guaranteed to be the executable name, should probably check it's what we expect
     command_args.remove(0);
 
-    let response = context
-        .execute(
-            shlex::try_join(
-                command_args
-                    .iter()
-                    .map(|e| e.as_str()),
-            )
-            .expect("failed to join args")
-            .as_str(),
-        );
-    
+    let response = context.execute(
+        shlex::try_join(
+            command_args.iter().map(|e| e.as_str()),
+        )
+        .expect("failed to join args")
+        .as_str(),
+    );
+
     match response {
         Ok(r) => {
             if let Some(text) = r.text() {
                 println!("{}", text);
             }
-            let tui_requested = context.has_resource::<Tui>();
+            let tui_requested =
+                context.has_resource::<Tui>();
 
             if tui_requested {
-                tui::run_tui(&mut context).expect("failed to run tui session"); 
+                tui::run_tui(&mut context).expect(
+                    "failed to run tui session",
+                );
             }
-        },
+        }
         Err(e) => {
             println!("error: {:?}", e);
         }
@@ -57,4 +58,3 @@ fn main() -> dolmen::Result<()> {
 
     Ok(())
 }
-

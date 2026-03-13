@@ -18,6 +18,7 @@ ratatui = "0.29.0"
 insta = "1.44.3"
 gui = { version = "0.1.0", path = "../gui" }
 dolmen = { version = "0.0.1", git = "https://github.com/eupraxia05/dolmen.git" }
+chrono = "0.4.43"
 
 [lints]
 workspace = true

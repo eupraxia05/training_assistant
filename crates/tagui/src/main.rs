@@ -1,10 +1,10 @@
 //! The GUI application for Training Assistant.
 
+use billing::BillingPlugin;
+use db_commands::DbCommandsPlugin;
 use dolmen::prelude::*;
 use framework::prelude::*;
 use gui::prelude::*;
-use db_commands::DbCommandsPlugin;
-use billing::InvoicePlugin;
 
 fn main() -> dolmen::Result<()> {
     let options = eframe::NativeOptions {
@@ -17,7 +17,7 @@ fn main() -> dolmen::Result<()> {
     context.add_plugin(DbPlugin)?;
     context.add_plugin(DbCommandsPlugin)?;
     context.add_plugin(GuiPlugin)?;
-    context.add_plugin(InvoicePlugin)?;
+    context.add_plugin(BillingPlugin)?;
 
     context.startup()?;
 
@@ -30,19 +30,25 @@ fn main() -> dolmen::Result<()> {
             egui::CentralPanel::default().show(
                 ctx,
                 |ui| {
-
                     ui.label("hello world!");
                 },
             );
         },
-    ).expect("failed to run eframe app");
+    )
+    .expect("failed to run eframe app");
 
     Ok(())
 }
 
-fn build_ui(context: &mut Context, egui_ctx: &egui::Context) {
+fn build_ui(
+    context: &mut Context,
+    egui_ctx: &egui::Context,
+) {
     gui::menu_ui(context, egui_ctx);
-    egui::CentralPanel::default().show(egui_ctx, |ui| {
-        ui.label("content");
-    });
+    egui::CentralPanel::default().show(
+        egui_ctx,
+        |ui| {
+            ui.label("content");
+        },
+    );
 }

@@ -25,42 +25,14 @@ use ratatui::widgets::{Block, Paragraph, Widget};
 /// A `Plugin` that sets up the required commands and
 /// tables for billing.
 #[derive(Default, Clone)]
-pub struct InvoicePlugin;
-
-/// A table row storing a single issued invoice. Stored in the table
-/// `invoice`.
-#[derive(TableRow, Debug)]
-pub struct Invoice {
-    /// The row ID in the `client` table representing the client paying the
-    /// invoice.
-    pub client: RowId,
-
-    /// The row ID in the `trainer` table representing the trainer issuing the
-    /// invoice.
-    pub trainer: RowId,
-
-    /// An invoice number, in any desired format.
-    pub invoice_number: String,
-
-    /// The due date of the invoice.
-    pub due_date: String,
-
-    /// The date the invoice was paid.
-    pub date_paid: String,
-
-    /// The method by which the invoice was paid (cash, payment processor, etc)
-    pub paid_via: String,
-
-    /// The list of charges this invoice covers.
-    pub charges: Vec<RowId>,
-}
+pub struct BillingPlugin;
 
 /// A table row storing a single issued charge. Stored in the table
 /// `charge`.
 #[derive(TableRow, Debug)]
 pub struct Charge {
     /// The date the charge was issued.
-    pub date: String,
+    pub date: chrono::NaiveDate,
 
     /// A description of the charge
     /// (e.g. `"Personal training session (60 min)"`)
@@ -69,11 +41,13 @@ pub struct Charge {
     /// The amount charged.
     // TODO: replace this with a proper currency field
     pub amount: i32,
+
+    pub client: RowId,
 }
 
 #[derive(TableRow, Debug)]
 pub struct Payment {
-    pub date: String,
+    pub date: chrono::NaiveDate,
 
     pub trainer: RowId,
 
@@ -83,12 +57,14 @@ pub struct Payment {
     pub amount: u32,
 
     pub paid_via: String,
+
+    pub receipt_number: String,
 }
 
 ///////////////////////////////////////////////////////////////////////////////
 // PRIVATE IMPLEMENTATION
 ///////////////////////////////////////////////////////////////////////////////
-impl Plugin for InvoicePlugin {
+impl Plugin for BillingPlugin {
     fn build(
         self,
         context: &mut Context,
@@ -97,9 +73,6 @@ impl Plugin for InvoicePlugin {
         context
             .add_table(TableConfig::new::<Charge>(
                 "charge",
-            ))
-            .add_table(TableConfig::new::<Invoice>(
-                "invoice",
             ))
             .add_table(TableConfig::new::<Payment>(
                 "payment",
@@ -113,8 +86,8 @@ impl Plugin for InvoicePlugin {
                 .subcommand(Command::new("generate")
                     .alias("gen")
                     .about("Generates an invoice document")
-                    .arg(Arg::new("invoice-id")
-                        .long("invoice-id")
+                    .arg(Arg::new("payment-id")
+                        .long("payment-id")
                         .value_parser(clap::value_parser!(i64))
                         .required(true)
                         .help("The invoice row ID to \
@@ -150,7 +123,7 @@ fn process_invoice_generate_command(
 ) -> dolmen::Result<CommandResponse> {
     // get the command arguments
     let invoice_row_id = arg_matches
-        .get_one::<i64>("invoice-id")
+        .get_one::<i64>("payment-id")
         .expect("Missing required argument");
     let out_folder = arg_matches
         .get_one::<PathBuf>("out-dir")
@@ -232,6 +205,166 @@ fn create_invoice(
     Ok(())
 }
 
+struct ReceiptInfo {
+    // TODO: replace these with a proper currency field
+    start_balance: i32,
+    end_balance: i32,
+    charges: Vec<RowId>,
+    charge_total: u32,
+    last_payment_date: String,
+}
+
+fn get_receipt_info(
+    db_connection: &mut DbConnection,
+    payment_row_id: RowId,
+) -> dolmen::Result<ReceiptInfo> {
+    let payment = Payment::from_table_row(
+        db_connection,
+        "payment".into(),
+        payment_row_id,
+    )?;
+
+    let payment_row_ids =
+        db_connection.get_table_row_ids("payment")?;
+
+    let charge_row_ids =
+        db_connection.get_table_row_ids("charge")?;
+
+    let payments_for_client = payment_row_ids
+        .iter()
+        .filter(|p| {
+            **p != payment_row_id.0
+                && db_connection
+                    .get_field_in_table_row::<String>(
+                        "payment",
+                        RowId(**p),
+                        "date",
+                    )
+                    .unwrap()
+                    < payment.date.to_string()
+                && db_connection
+                    .get_field_in_table_row::<RowId>(
+                        "payment",
+                        RowId(**p),
+                        "client",
+                    )
+                    .unwrap()
+                    == payment.client
+        })
+        .collect::<Vec<_>>();
+
+    // get last payment date
+    let last_payment_date = payments_for_client
+        .iter()
+        .map(|p| {
+            db_connection
+                .get_field_in_table_row::<String>(
+                    "payment",
+                    RowId(**p),
+                    "date",
+                )
+                .unwrap()
+        })
+        .max()
+        .unwrap_or("0000-01-01".into());
+
+    let charges_for_client = charge_row_ids
+        .iter()
+        .filter(|c| {
+            db_connection
+                .get_field_in_table_row::<RowId>(
+                    "charge",
+                    RowId(**c),
+                    "client",
+                )
+                .unwrap()
+                == payment.client
+        })
+        .collect::<Vec<_>>();
+
+    let charges_for_last_receipt = charges_for_client
+        .iter()
+        .filter(|c| {
+            db_connection
+                .get_field_in_table_row::<String>(
+                    "charge",
+                    RowId(***c),
+                    "date",
+                )
+                .unwrap()
+                <= last_payment_date
+        })
+        .collect::<Vec<_>>();
+
+    let charges_for_this_receipt = charges_for_client
+        .iter()
+        .filter(|c| {
+            let charge_date = db_connection
+                .get_field_in_table_row::<String>(
+                    "charge",
+                    RowId(***c),
+                    "date",
+                )
+                .unwrap();
+            charge_date > last_payment_date
+                && charge_date
+                    <= payment.date.to_string()
+        })
+        .collect::<Vec<_>>();
+
+    let mut payment_total = 0;
+    for payment in payments_for_client.iter() {
+        payment_total += db_connection
+            .get_field_in_table_row::<u32>(
+                "payment",
+                RowId(**payment),
+                "amount",
+            )
+            .unwrap()
+    }
+
+    let mut last_receipt_charge_total = 0;
+    for charge in charges_for_last_receipt.iter() {
+        last_receipt_charge_total += db_connection
+            .get_field_in_table_row::<u32>(
+                "charge",
+                RowId(***charge),
+                "amount",
+            )
+            .unwrap()
+    }
+
+    let start_balance = last_receipt_charge_total
+        as i32
+        - payment_total as i32;
+
+    let mut charge_total = 0;
+    charges_for_this_receipt.iter().for_each(|c| {
+        charge_total += db_connection
+            .get_field_in_table_row::<u32>(
+                "charge",
+                RowId(***c),
+                "amount",
+            )
+            .unwrap();
+    });
+
+    let end_balance = start_balance as i32
+        + charge_total as i32
+        - payment.amount as i32;
+
+    Ok(ReceiptInfo {
+        start_balance,
+        end_balance,
+        charges: charges_for_this_receipt
+            .iter()
+            .map(|c| RowId(***c))
+            .collect::<Vec<_>>(),
+        charge_total,
+        last_payment_date,
+    })
+}
+
 /// Generates a LaTeX document from an invoice.
 ///
 /// * `db_connection` - A connection to the database.
@@ -239,38 +372,30 @@ fn create_invoice(
 ///   the invoice to generate.
 fn generate_latex(
     db_connection: &mut DbConnection,
-    invoice_row_id: RowId,
+    payment_row_id: RowId,
 ) -> dolmen::Result<Document> {
-    // get the relevant rows from the database
-    let invoice = Invoice::from_table_row(
+    let payment = Payment::from_table_row(
         db_connection,
-        "invoice".into(),
-        invoice_row_id,
+        "payment".into(),
+        payment_row_id,
     )?;
+    // get the relevant rows from the database
     let trainer = Trainer::from_table_row(
         db_connection,
         "trainer".into(),
-        invoice.trainer,
+        payment.trainer,
     )?;
     let client = Client::from_table_row(
         db_connection,
         "client".into(),
-        invoice.client,
+        payment.client,
     )?;
 
-    let charges = invoice
-        .charges
-        .iter()
-        .map(|c| {
-            // todo: get rid of this unwrap
-            Charge::from_table_row(
-                db_connection,
-                "charge".into(),
-                *c,
-            )
-            .unwrap()
-        })
-        .collect::<Vec<_>>();
+    let receipt_info = get_receipt_info(
+        db_connection,
+        payment_row_id,
+    )
+    .unwrap();
 
     // Create the document and set up the preamble with all the needed data.
     let mut doc =
@@ -322,36 +447,45 @@ fn generate_latex(
     ));
     doc.preamble.push(NewCommand(
         "invoicenumber".into(),
-        invoice.invoice_number,
-    ));
-    doc.preamble.push(NewCommand(
-        "paymentdue".into(),
-        invoice.due_date,
+        payment.receipt_number,
     ));
     doc.preamble.push(NewCommand(
         "paymentmade".into(),
-        invoice.date_paid,
+        payment.date.to_string(),
     ));
     doc.preamble.push(NewCommand(
         "paidvia".into(),
-        invoice.paid_via,
+        payment.paid_via,
+    ));
+    doc.preamble.push(NewCommand(
+        "lastpayment".into(),
+        receipt_info.last_payment_date,
+    ));
+    doc.preamble.push(NewCommand(
+        "subtotal".into(),
+        format!(
+            "{}",
+            receipt_info.charge_total as i32
+                + receipt_info.start_balance
+        ),
     ));
 
-    let mut charge_data = String::from("");
-    let mut charge_total = 0;
-
-    for charge in charges {
-        charge_data.push_str(
-            format!(
-                "{} & {} & {} \\\\",
-                charge.date,
-                charge.description,
-                charge.amount
-            )
-            .as_str(),
-        );
-        charge_total += charge.amount;
-    }
+    let mut charge_data = String::new();
+    receipt_info.charges.iter().for_each(|c| {
+        let charge = Charge::from_table_row(
+            db_connection,
+            "charge".into(),
+            *c,
+        )
+        .unwrap();
+        charge_data += format!(
+            "{} & {} & {} \\\\ ",
+            charge.date,
+            charge.description,
+            charge.amount
+        )
+        .as_str();
+    });
 
     doc.preamble.push(NewCommand(
         "chargedata".into(),
@@ -359,8 +493,18 @@ fn generate_latex(
     ));
 
     doc.preamble.push(NewCommand(
-        "chargetotal".into(),
-        format!("{}", charge_total),
+        "paymentamount".into(),
+        format!("{}", payment.amount),
+    ));
+
+    doc.preamble.push(NewCommand(
+        "balancestart".into(),
+        format!("{}", receipt_info.start_balance),
+    ));
+
+    doc.preamble.push(NewCommand(
+        "balanceend".into(),
+        format!("{}", receipt_info.end_balance),
     ));
 
     let company_header =
@@ -437,25 +581,14 @@ impl TabImpl for ExportInvoiceTabImpl {
 
 #[cfg(test)]
 mod test {
-    use crate::InvoicePlugin;
+    use crate::{BillingPlugin, get_receipt_info};
     use dolmen::prelude::*;
     use framework::prelude::*;
     use training::TrainingPlugin;
 
-    fn setup_invoice_data(
+    fn add_test_trainer(
         db_connection: &mut DbConnection,
     ) -> dolmen::Result<RowId> {
-        // TODO: setting each field like this is super verbose and not
-        // typesafe, this should be wrapped
-        let client = db_connection
-            .new_row_in_table("client")?;
-        db_connection.set_field_in_table(
-            "client",
-            client,
-            "name",
-            "Clarissa Client",
-        )?;
-
         let trainer = db_connection
             .new_row_in_table("trainer")?;
         db_connection.set_field_in_table(
@@ -489,13 +622,34 @@ mod test {
             "(303) 175-3098",
         )?;
 
+        Ok(trainer)
+    }
+
+    fn add_test_client(
+        db_connection: &mut DbConnection,
+        name: &str,
+    ) -> dolmen::Result<RowId> {
+        // TODO: setting each field like this is super verbose and not
+        // typesafe, this should be wrapped
+        let client = db_connection
+            .new_row_in_table("client")?;
+        db_connection.set_field_in_table(
+            "client", client, "name", name,
+        )?;
+
+        Ok(client)
+    }
+
+    fn add_test_charge(
+        db_connection: &mut DbConnection,
+        date: &str,
+        amount: u32,
+        client: RowId,
+    ) -> dolmen::Result<RowId> {
         let charge = db_connection
             .new_row_in_table("charge")?;
         db_connection.set_field_in_table(
-            "charge",
-            charge,
-            "date",
-            "11/05/2025",
+            "charge", charge, "date", date,
         )?;
         db_connection.set_field_in_table(
             "charge",
@@ -504,49 +658,74 @@ mod test {
             "Personal training session (60 min)",
         )?;
         db_connection.set_field_in_table(
-            "charge", charge, "amount", "50",
+            "charge", charge, "amount", amount,
+        )?;
+        db_connection.set_field_in_table(
+            "charge", charge, "client", client.0,
         )?;
 
-        let invoice = db_connection
-            .new_row_in_table("invoice")?;
+        Ok(charge)
+    }
+
+    fn add_test_payment(
+        db_connection: &mut DbConnection,
+        client: RowId,
+        trainer: RowId,
+        date: String,
+        amount: u32,
+    ) -> dolmen::Result<RowId> {
+        let payment = db_connection
+            .new_row_in_table("payment")?;
         // TODO: I don't like passing client.0 here, RowId should implement
         // ToSql
         db_connection.set_field_in_table(
-            "invoice", invoice, "client", client.0,
+            "payment", payment, "client", client.0,
         )?;
         db_connection.set_field_in_table(
-            "invoice", invoice, "trainer", trainer.0,
+            "payment", payment, "trainer", trainer.0,
         )?;
         db_connection.set_field_in_table(
-            "invoice",
-            invoice,
-            "invoice_number",
+            "payment",
+            payment,
+            "receipt_number",
             "2025-0532",
         )?;
         db_connection.set_field_in_table(
-            "invoice",
-            invoice,
-            "due_date",
-            "11/06/2025",
+            "payment", payment, "amount", amount,
         )?;
         db_connection.set_field_in_table(
-            "invoice",
-            invoice,
-            "date_paid",
-            "11/07/2025",
+            "payment", payment, "date", date,
         )?;
         db_connection.set_field_in_table(
-            "invoice", invoice, "paid_via", "Cash",
-        )?;
-        // TODO: same here, Vec<RowId> should implement ToSql
-        db_connection.set_field_in_table(
-            "invoice",
-            invoice,
-            "charges",
-            format!("{}", charge.0),
+            "payment", payment, "paid_via", "Cash",
         )?;
 
-        Ok(invoice)
+        Ok(payment)
+    }
+
+    fn setup_invoice_data(
+        db_connection: &mut DbConnection,
+    ) -> dolmen::Result<RowId> {
+        let trainer = add_test_trainer(db_connection)?;
+        let client = add_test_client(
+            db_connection,
+            "Clarissa Client",
+        )?;
+        let _charge = add_test_charge(
+            db_connection,
+            "2026-01-04",
+            50,
+            client,
+        )?;
+        let payment = add_test_payment(
+            db_connection,
+            client,
+            trainer,
+            "2026-01-04".into(),
+            50,
+        )?;
+
+        Ok(payment)
     }
 
     #[test]
@@ -554,7 +733,7 @@ mod test {
         let mut context = Context::new();
         context
             .add_plugin(DbPlugin)?
-            .add_plugin(InvoicePlugin)?
+            .add_plugin(BillingPlugin)?
             .add_plugin(TrainingPlugin)?;
         context
             .get_resource_mut::<DbConfig>()
@@ -606,7 +785,7 @@ mod test {
         let mut context = Context::new();
         context
             .add_plugin(DbPlugin)?
-            .add_plugin(InvoicePlugin)?
+            .add_plugin(BillingPlugin)?
             .add_plugin(TrainingPlugin)?;
         context
             .get_resource_mut::<DbConfig>()
@@ -639,7 +818,7 @@ mod test {
         .expect("failed to write document");
 
         let response = context.execute(
-            format!("invoice generate --invoice-id={} --out-dir={}", invoice.0, 
+            format!("invoice generate --payment-id={} --out-dir={}", invoice.0, 
                 out_path.as_os_str().to_str().unwrap()
             ).as_str()
         )?;
@@ -649,6 +828,193 @@ mod test {
             response.text().unwrap(),
             "Successfully generated invoice at /tmp/invoice.pdf."
         );
+
+        Ok(())
+    }
+
+    fn setup_test_context() -> dolmen::Result<Context>
+    {
+        let mut context = Context::new();
+
+        context
+            .add_plugin(DbPlugin)?
+            .add_plugin(BillingPlugin)?
+            .add_plugin(TrainingPlugin)?;
+
+        context
+            .get_resource_mut::<DbConfig>()
+            .unwrap()
+            .open_db_in_memory = true;
+
+        context.startup()?;
+
+        Ok(context)
+    }
+
+    // Simplest test case: one client, one charge, one payment. Same date, for 50.
+    // We expect a start balance of 0, end balance of 0, and one relevant charge totaling 50.
+    #[test]
+    fn test_receipt_info_1() -> dolmen::Result<()> {
+        let mut context = setup_test_context()?;
+
+        let db_connection = context.db_connection()?;
+
+        let trainer = add_test_trainer(db_connection)?;
+        let client = add_test_client(
+            db_connection,
+            "Clarissa Client",
+        )?;
+        let charge = add_test_charge(
+            db_connection,
+            "2026-01-14",
+            50,
+            client,
+        )?;
+        let payment = add_test_payment(
+            db_connection,
+            client,
+            trainer,
+            "2026-01-14".into(),
+            50,
+        )?;
+
+        let receipt_info =
+            get_receipt_info(db_connection, payment)?;
+        assert_eq!(receipt_info.charges.len(), 1);
+        assert!(
+            receipt_info.charges.contains(&charge)
+        );
+        assert_eq!(receipt_info.start_balance, 0);
+        assert_eq!(receipt_info.end_balance, 0);
+        assert_eq!(receipt_info.charge_total, 50);
+
+        Ok(())
+    }
+
+    // One client, two charges, amount of 50 for each, payment for 90.
+    // Expect a start balance of 0, end balance of 10, and two relevant charges totaling 100.
+    #[test]
+    fn test_receipt_info_2() -> dolmen::Result<()> {
+        let mut context = setup_test_context()?;
+        let db_connection = context.db_connection()?;
+        let trainer = add_test_trainer(db_connection)?;
+        let client = add_test_client(
+            db_connection,
+            "Clarissa Client",
+        )?;
+        let charge_1 = add_test_charge(
+            db_connection,
+            "2026-02-10",
+            50,
+            client,
+        )?;
+        let charge_2 = add_test_charge(
+            db_connection,
+            "2026-02-11",
+            50,
+            client,
+        )?;
+        let payment = add_test_payment(
+            db_connection,
+            client,
+            trainer,
+            "2026-02-12".into(),
+            90,
+        )?;
+
+        let receipt_info =
+            get_receipt_info(db_connection, payment)?;
+
+        assert_eq!(receipt_info.start_balance, 0);
+        assert_eq!(receipt_info.end_balance, 10);
+        assert_eq!(receipt_info.charges.len(), 2);
+        assert!(
+            receipt_info.charges.contains(&charge_1)
+        );
+        assert!(
+            receipt_info.charges.contains(&charge_2)
+        );
+        assert_eq!(receipt_info.charge_total, 100);
+
+        Ok(())
+    }
+
+    // One client, three charges, two payments. All charges for 50. First payment for 60,
+    // date after the first charge. Second payment for 90, date after the third charge.
+    // For the first payment, expect start balance of 0, end balance of -10, only relevant
+    // charge is the first, totaling 50.
+    // For the second payment, expect start balance of -10, end balance of 0, relevant charges
+    // are the second and third, totaling 100.
+    #[test]
+    fn test_receipt_info_3() -> dolmen::Result<()> {
+        let mut context = setup_test_context()?;
+        let db_connection = context.db_connection()?;
+        let trainer = add_test_trainer(db_connection)?;
+        let client = add_test_client(
+            db_connection,
+            "Clarissa Client",
+        )?;
+        let charge_1 = add_test_charge(
+            db_connection,
+            "2026-03-01",
+            50,
+            client,
+        )?;
+        let charge_2 = add_test_charge(
+            db_connection,
+            "2026-03-03",
+            50,
+            client,
+        )?;
+        let charge_3 = add_test_charge(
+            db_connection,
+            "2026-03-04",
+            50,
+            client,
+        )?;
+        let payment_1 = add_test_payment(
+            db_connection,
+            client,
+            trainer,
+            "2026-03-02".into(),
+            60,
+        )?;
+        let payment_2 = add_test_payment(
+            db_connection,
+            client,
+            trainer,
+            "2026-03-05".into(),
+            90,
+        )?;
+
+        let receipt_info_1 = get_receipt_info(
+            db_connection,
+            payment_1,
+        )?;
+
+        let receipt_info_2 = get_receipt_info(
+            db_connection,
+            payment_2,
+        )?;
+
+        assert_eq!(receipt_info_1.start_balance, 0);
+        assert_eq!(receipt_info_1.end_balance, -10);
+        assert_eq!(receipt_info_1.charges.len(), 1);
+        assert!(
+            receipt_info_1.charges.contains(&charge_1)
+        );
+        assert_eq!(receipt_info_1.charge_total, 50);
+
+        assert_eq!(receipt_info_2.start_balance, -10);
+        assert_eq!(receipt_info_2.end_balance, 0);
+        assert_eq!(receipt_info_2.charges.len(), 2);
+        assert!(
+            receipt_info_2.charges.contains(&charge_2)
+        );
+        assert!(
+            receipt_info_2.charges.contains(&charge_3)
+        );
+        assert_eq!(receipt_info_2.charge_total, 100);
 
         Ok(())
     }

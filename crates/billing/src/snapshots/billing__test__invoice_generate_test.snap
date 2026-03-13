@@ -15,11 +15,14 @@ expression: rendered
 \newcommand{\companyphone}{(303) 175-3098}
 \newcommand{\clientname}{Clarissa Client}
 \newcommand{\invoicenumber}{2025-0532}
-\newcommand{\paymentdue}{11/06/2025}
-\newcommand{\paymentmade}{11/07/2025}
+\newcommand{\paymentmade}{2026-01-04}
 \newcommand{\paidvia}{Cash}
-\newcommand{\chargedata}{11/05/2025 & Personal training session (60 min) & 50 \\}
-\newcommand{\chargetotal}{50}
+\newcommand{\lastpayment}{0000-01-01}
+\newcommand{\subtotal}{50}
+\newcommand{\chargedata}{2026-01-04 & Personal training session (60 min) & 50 \\ }
+\newcommand{\paymentamount}{50}
+\newcommand{\balancestart}{0}
+\newcommand{\balanceend}{0}
 \newcommand{\companyheader}{\includegraphics[width=256px]{}}
 \begin{document}
 \begin{tabular}{>{\centering\arraybackslash}m{10cm} >{\centering\arraybackslash}m{7cm}}
@@ -32,23 +35,39 @@ expression: rendered
 \hrule
 \vspace{0.5cm}
 
-\noindent{\textbf{Invoice Number:} \invoicenumber} \\
 \noindent{\textbf{Client Name:} \clientname} \\
-\noindent{\textbf{Payment Due:} \paymentdue} \\
 \noindent{\textbf{Payment Made:} \paymentmade} \\
 \noindent{\textbf{Paid Via:} \paidvia} \\
+\noindent{\textbf{Receipt Number:} \invoicenumber} \\
 
 \vspace{0.5cm}
 \begin{center}
+\ifnum\balanceend=0
 \begin{tabular}{|p{2.0cm}|p{8.0cm}|p{2.5cm}|}
 	\hline
 	\textbf{Date} & \textbf{Description} & \textbf{Amount (\$)} \\
 	\hline
+	\ifnum\balancestart=0{}\else{\lastpayment & Balance from last payment & \balancestart \\}\fi
 	\chargedata
 	\hhline{|=|=|=|}
-	\multicolumn{2}{|l|}{\textbf{Total}} & \textbf{\chargetotal} \\
+	\multicolumn{2}{|r|}{\textit{Amount paid}} & \paymentamount \\
 	\hline
 \end{tabular}
+\else
+\begin{tabular}{|p{2.0cm}|p{8.0cm}|p{2.5cm}|}
+	\hline
+	\textbf{Date} & \textbf{Description} & \textbf{Amount (\$)} \\
+	\hline
+	\ifnum\balancestart=0{}\else{\lastpayment & Balance from last payment & \balancestart \\}\fi
+	\chargedata
+	\hhline{|=|=|=|}
+	\multicolumn{2}{|r|}{\textit{Balance before payment}} & \subtotal \\
+	\hline
+	\multicolumn{2}{|r|}{\textit{Amount paid}} & \paymentamount \\
+	\hline \multicolumn{2}{|r|}{\textit{Balance after payment}} & \balanceend \\
+	\hline
+\end{tabular}
+\fi
 \end{center}
 
 \vspace{0.5cm}
