@@ -1,24 +1,37 @@
 //! A core plugin for training administration.
-use dolmen::prelude::*;
-use framework::prelude::*;
-use framework_derive_macros::TableRow;
-use tui::prelude::*;
 use chrono::NaiveDate;
+use dolmen::prelude::*;
+use reliquary::prelude::*;
+use tui::prelude::*;
 
-/// The plugin for the Training system. 
+/// The plugin for the Training system.
 /// Add this to set up the required tables and commands.
 #[derive(Clone)]
 pub struct TrainingPlugin;
 
 impl Plugin for TrainingPlugin {
-    fn build(self, context: &mut Context) -> dolmen::Result<()> {
-        context.add_table(TableConfig::new::<Trainer>("trainer"))
-            .add_table(TableConfig::new::<Client>("client"))
-            .add_table(TableConfig::new::<Exercise>("exercise"))
-            .add_table(TableConfig::new::<Session>("session"));
-       
+    fn build(
+        self,
+        context: &mut Context,
+    ) -> dolmen::Result<()> {
+        context
+            .add_table(TableConfig::new::<Trainer>(
+                "trainer",
+            ))
+            .add_table(TableConfig::new::<Client>(
+                "client",
+            ))
+            .add_table(TableConfig::new::<Exercise>(
+                "exercise",
+            ))
+            .add_table(TableConfig::new::<Session>(
+                "session",
+            ));
+
         // TODO: conditionally compile this
-        if let Some(new_tab_types) = context.get_resource_mut::<TuiNewTabTypes>() {
+        if let Some(new_tab_types) = context
+            .get_resource_mut::<TuiNewTabTypes>(
+        ) {
             new_tab_types.register_new_tab_type::<ScheduleTabImpl>("Schedule");
         }
 
@@ -86,7 +99,7 @@ impl Client {
 /// An exercise in the exercise library.
 #[derive(TableRow, Debug)]
 pub struct Exercise {
-    name: String
+    name: String,
 }
 
 // TODO: implement this
@@ -98,22 +111,36 @@ struct ScheduleTabState;
 impl TabImpl for ScheduleTabImpl {
     type State = ScheduleTabState;
 
-    fn title() -> String { "Schedule".into() }
+    fn title() -> String {
+        "Schedule".into()
+    }
 
-    fn render(_: &mut Context, buffer: &mut Buffer, rect: Rect, block: Block, _: usize) {
-        Paragraph::new(Line::from("Schedule UI not implemented.")).block(block).render(rect, buffer);
+    fn render(
+        _: &mut Context,
+        buffer: &mut Buffer,
+        rect: Rect,
+        block: Block,
+        _: usize,
+    ) {
+        Paragraph::new(Line::from(
+            "Schedule UI not implemented.",
+        ))
+        .block(block)
+        .render(rect, buffer);
     }
 
     fn keybinds() -> Vec<KeyBind> {
-        vec!()
+        vec![]
     }
 
     fn handle_key(_: &mut Context, _: &str, _: usize) {
-
     }
 
-    fn handle_text(_: &mut Context, _: ratatui::crossterm::event::Event, _: usize) {
-
+    fn handle_text(
+        _: &mut Context,
+        _: ratatui::crossterm::event::Event,
+        _: usize,
+    ) {
     }
 }
 
@@ -127,4 +154,3 @@ pub struct Session {
     client: RowId,
     charge: Option<RowId>,
 }
-

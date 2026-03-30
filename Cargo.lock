@@ -492,12 +492,11 @@ dependencies = [
  "directories",
  "documents",
  "dolmen",
- "framework",
- "framework_derive_macros",
  "gui",
  "insta",
  "latex",
  "ratatui",
+ "reliquary",
  "rusqlite",
  "tabled",
  "training",
@@ -1040,9 +1039,9 @@ dependencies = [
  "clap",
  "crossterm 0.29.0",
  "dolmen",
- "framework",
  "gui",
  "ratatui",
+ "reliquary",
  "tabled",
  "tui",
  "tui-textarea",
@@ -1150,7 +1149,7 @@ version = "0.0.1"
 source = "git+https://github.com/eupraxia05/dolmen.git#a1b6e1db34000f98b137cdfd77a807f61bfd01b0"
 dependencies = [
  "clap",
- "macros",
+ "macros 0.1.0 (git+https://github.com/eupraxia05/dolmen.git)",
  "shlex",
 ]
 
@@ -1553,33 +1552,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "framework"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "clap",
- "crossterm 0.29.0",
- "directories",
- "dolmen",
- "framework_derive_macros",
- "ratatui",
- "rusqlite",
- "shlex",
- "tabled",
- "uuid",
- "venial",
-]
-
-[[package]]
-name = "framework_derive_macros"
-version = "0.1.0"
-dependencies = [
- "proc-macro2",
- "quote",
- "venial",
-]
-
-[[package]]
 name = "futures-core"
 version = "0.3.31"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1820,7 +1792,6 @@ version = "0.1.0"
 dependencies = [
  "dolmen",
  "egui",
- "framework",
 ]
 
 [[package]]
@@ -2274,6 +2245,16 @@ dependencies = [
 name = "macros"
 version = "0.1.0"
 source = "git+https://github.com/eupraxia05/dolmen.git#a1b6e1db34000f98b137cdfd77a807f61bfd01b0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "venial",
+]
+
+[[package]]
+name = "macros"
+version = "0.1.0"
+source = "git+https://github.com/eupraxia05/reliquary.git#9c4c051887c3f0c625e378fc15bc1ca563468c78"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3121,6 +3102,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "reliquary"
+version = "0.1.0"
+source = "git+https://github.com/eupraxia05/reliquary.git#9c4c051887c3f0c625e378fc15bc1ca563468c78"
+dependencies = [
+ "chrono",
+ "clap",
+ "crossterm 0.29.0",
+ "directories",
+ "dolmen",
+ "macros 0.1.0 (git+https://github.com/eupraxia05/reliquary.git)",
+ "ratatui",
+ "rusqlite",
+ "shlex",
+ "tabled",
+ "venial",
+]
+
+[[package]]
 name = "renderdoc-sys"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3571,8 +3570,8 @@ dependencies = [
  "crossterm 0.29.0",
  "db_commands",
  "dolmen",
- "framework",
  "ratatui",
+ "reliquary",
  "shlex",
  "training",
  "tui",
@@ -3587,8 +3586,8 @@ dependencies = [
  "dolmen",
  "eframe",
  "egui",
- "framework",
  "gui",
+ "reliquary",
 ]
 
 [[package]]
@@ -3810,9 +3809,8 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "dolmen",
- "framework",
- "framework_derive_macros",
  "ratatui",
+ "reliquary",
  "rusqlite",
  "tabled",
  "tui",
@@ -3831,7 +3829,6 @@ dependencies = [
  "clap",
  "crossterm 0.29.0",
  "dolmen",
- "framework",
  "insta",
  "ratatui",
  "tui-textarea",

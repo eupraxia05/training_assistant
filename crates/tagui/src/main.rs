@@ -3,8 +3,8 @@
 use billing::BillingPlugin;
 use db_commands::DbCommandsPlugin;
 use dolmen::prelude::*;
-use framework::prelude::*;
 use gui::prelude::*;
+use reliquary::prelude::*;
 
 fn main() -> dolmen::Result<()> {
     let options = eframe::NativeOptions {

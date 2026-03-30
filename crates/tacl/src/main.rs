@@ -1,6 +1,6 @@
 //! The command-line interface for Training Assistant.
 use dolmen::prelude::*;
-use framework::prelude::*;
+use reliquary::prelude::*;
 use tui::Tui;
 
 fn main() -> dolmen::Result<()> {

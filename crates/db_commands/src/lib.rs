@@ -1,7 +1,6 @@
 //! A plugin that adds a set of commands for editing the database.
 use clap::{Arg, ArgMatches, Command};
 use dolmen::prelude::*;
-use framework::prelude::*;
 use gui::prelude::*;
 use ratatui::crossterm::event::{
     KeyCode, KeyModifiers,
@@ -16,6 +15,7 @@ use ratatui::{
         TableState, Widget, Wrap,
     },
 };
+use reliquary::prelude::*;
 use tabled::builder::Builder as TabledBuilder;
 use tui::prelude::*;
 use tui_textarea::Input;

@@ -2,11 +2,10 @@
 use clap::{Arg, ArgMatches, Command};
 use documents::write_document;
 use dolmen::prelude::*;
-use framework::prelude::*;
-use framework_derive_macros::TableRow;
 use latex::{
     Document, DocumentClass, Element, PreambleElement,
 };
+use reliquary::prelude::*;
 use std::path::PathBuf;
 use training::{Client, Trainer};
 
@@ -583,7 +582,7 @@ impl TabImpl for ExportInvoiceTabImpl {
 mod test {
     use crate::{BillingPlugin, get_receipt_info};
     use dolmen::prelude::*;
-    use framework::prelude::*;
+    use reliquary::prelude::*;
     use training::TrainingPlugin;
 
     fn add_test_trainer(
