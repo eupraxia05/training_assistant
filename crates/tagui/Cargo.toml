@@ -10,7 +10,7 @@ dolmen = { version = "0.0.1", git = "https://github.com/eupraxia05/dolmen.git" }
 eframe = "0.33.0"
 egui = "0.33.0"
 gui = { version = "0.1.0", path = "../gui" }
-reliquary = { git = "https://github.com/eupraxia05/reliquary.git" }
+reliquary = { git = "https://github.com/eupraxia05/reliquary.git", rev = "9c4c051" }
 
 [lints]
 workspace = true
