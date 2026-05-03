@@ -1,6 +1,7 @@
 //! A utility library for exporting LaTeX documents.
 use directories::ProjectDirs;
 use latex::Document;
+use std::io::Write;
 use std::path::Path;
 use std::process::{Command, Stdio};
 
@@ -30,57 +31,69 @@ pub fn write_document(
     let dest_path =
         out_folder.join(format!("{}.pdf", file_name));
 
-    println!("1");
-
     std::fs::create_dir_all(temp_dir.clone())
         .map_err(|e| e.to_string())?;
 
-    println!("2");
-
     let rendered = latex::print(doc)
         .map_err(|e| e.to_string())?;
-    
-    println!("3");
 
     std::fs::write(tex_path.clone(), rendered)
         .map_err(|e| e.to_string())?;
 
-    println!("4");
-
     let mut cmd = Command::new("pdflatex");
-        cmd.stdout(Stdio::null())
-        .stderr(Stdio::null());
+    cmd.stdout(Stdio::null()).stderr(Stdio::null());
     cmd.arg(format!(
         "-output-directory={}",
         temp_dir.display()
     ))
-    .arg(tex_path);
+    .arg(tex_path)
+    .arg("-interaction=nonstopmode");
 
-    let _cmd_output =
-        cmd.output().map_err(|e| e.to_string())?;
+    println!("executing command: {:?}", cmd);
 
-    println!("5");
+    let cmd_output = cmd.output();
 
-    // TODO: make an argument to enable this
-    /*println!("piping command output...");
+    match cmd_output {
+        Err(e) => {
+            if e.kind() == std::io::ErrorKind::NotFound
+            {
+                return Err(
+                    "pdflatex not found".into()
+                );
+            } else {
+                return Err(e.to_string());
+            }
+        }
+        Ok(output) => {
+            // TODO: make an argument to enable this
+            println!("piping command output...");
 
-    std::io::stdout()
-        .write(&cmd_output.stdout)
-        .map_err(|e| e.to_string())?;
-    std::io::stderr()
-        .write(&cmd_output.stderr)
-        .map_err(|e| e.to_string())?;
-    std::io::stdout()
-        .flush()
-        .map_err(|e| e.to_string())?;
-    std::io::stderr()
-        .flush()
-        .map_err(|e| e.to_string())?;*/
+            std::io::stdout()
+                .write(&output.stdout)
+                .map_err(|e| e.to_string())?;
+            std::io::stderr()
+                .write(&output.stderr)
+                .map_err(|e| e.to_string())?;
+            std::io::stdout()
+                .flush()
+                .map_err(|e| e.to_string())?;
+            std::io::stderr()
+                .flush()
+                .map_err(|e| e.to_string())?;
 
-    println!("{:?}, {:?}", pdf_path, dest_path);
+            // TODO: only attempt copy if no errors were returned
+            println!(
+                "copying {:?} to {:?}",
+                pdf_path, dest_path
+            );
 
-    std::fs::copy(pdf_path.clone(), dest_path.clone())
-        .map_err(|e| e.to_string())?;
+            std::fs::copy(
+                pdf_path.clone(),
+                dest_path.clone(),
+            )
+            .map_err(|e| e.to_string())?;
+        }
+    }
 
     Ok(())
 }
