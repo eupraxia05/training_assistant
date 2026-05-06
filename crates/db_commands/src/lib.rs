@@ -355,9 +355,8 @@ impl TabImpl for DbInfoTabImpl {
         _: usize,
     ) {
         // TODO: remove this unwrap()
-        let db_connection = context
-            .get_resource_mut::<DbConnection>()
-            .unwrap();
+        let db_connection =
+            context.db_connection().unwrap();
         let text = db_info_text(db_connection);
 
         Paragraph::new(text)
@@ -422,9 +421,8 @@ impl TabImpl for EditTabImpl {
         if is_selecting_table {
             // TODO: remove this unwrap
             let table_names = {
-                let db_connection = context
-                    .get_resource_mut::<DbConnection>()
-                    .unwrap();
+                let db_connection =
+                    context.db_connection().unwrap();
                 db_connection
                     .tables()
                     .iter()
@@ -884,9 +882,8 @@ fn render_table_view(
         .clone()
         .unwrap();
     // TODO: get rid of this unwrap
-    let db_connection = context
-        .get_resource_mut::<DbConnection>()
-        .unwrap();
+    let db_connection =
+        context.db_connection().unwrap();
     let table_config = db_connection
         .tables()
         .iter()

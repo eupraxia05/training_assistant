@@ -383,12 +383,26 @@ fn generate_latex(
         db_connection,
         "trainer".into(),
         payment.trainer,
-    )?;
+    )
+    .map_err(|e| {
+        reliquary::Error::new(format!(
+            "couldn't get trainer {:?}: {:?}",
+            payment.trainer,
+            e.message()
+        ))
+    })?;
     let client = Client::from_table_row(
         db_connection,
         "client".into(),
         payment.client,
-    )?;
+    )
+    .map_err(|e| {
+        reliquary::Error::new(format!(
+            "couldn't get client {:?}: {:?}",
+            payment.client,
+            e.message()
+        ))
+    })?;
 
     let receipt_info = get_receipt_info(
         db_connection,
@@ -795,13 +809,16 @@ mod test {
 
         let db_connection = context.db_connection()?;
 
-        let invoice =
-            setup_invoice_data(db_connection)?;
+        let invoice = setup_invoice_data(
+            db_connection,
+        )
+        .expect("couldn't set up invoice data");
 
         let latex = crate::generate_latex(
             db_connection,
             invoice,
-        )?;
+        )
+        .expect("couldn't generate latex document");
 
         let out_path = std::env::temp_dir();
         println!("{:?}", out_path);

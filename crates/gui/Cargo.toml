@@ -4,8 +4,9 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-dolmen = { version = "0.0.1", git = "https://github.com/eupraxia05/dolmen.git" }
 egui = "0.33.3"
+dolmen = { workspace = true }
+reliquary = { workspace = true }
 
 [lints]
 workspace = true

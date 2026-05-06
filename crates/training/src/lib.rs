@@ -1,6 +1,7 @@
 //! A core plugin for training administration.
 use chrono::NaiveDate;
-use dolmen::prelude::*;
+use dolmen::context::*;
+use reliquary::dolmen::DbContextExt;
 use reliquary::prelude::*;
 use tui::prelude::*;
 
@@ -96,6 +97,44 @@ impl Client {
     }
 }
 
+#[derive(Debug)]
+pub struct ExerciseProgram {
+    exercises: Vec<RowId>,
+}
+
+impl TableField for ExerciseProgram {
+    fn sql_type() -> &'static str {
+        "TEXT"
+    }
+
+    fn from_table_field(
+        db_connection: &DbConnection,
+        table_name: String,
+        row_id: RowId,
+        field_name: String,
+    ) -> reliquary::Result<Self>
+    where
+        Self: Sized,
+    {
+        let exercises =
+            Vec::<RowId>::from_table_field(
+                db_connection,
+                table_name,
+                row_id,
+                field_name,
+            )?;
+
+        Ok(Self { exercises })
+    }
+
+    fn to_display_string(
+        &self,
+        args: reliquary::db::TableFieldDisplayStringArgs,
+    ) -> String {
+        format!("{:?}", self)
+    }
+}
+
 /// An exercise in the exercise library.
 #[derive(TableRow, Debug)]
 pub struct Exercise {
@@ -154,3 +193,14 @@ pub struct Session {
     client: RowId,
     charge: Option<RowId>,
 }
+
+/*#[cfg(test)]
+mod tests {
+    fn test1() {
+        use dolmen::prelude::*;
+        use reliquary::prelude::*;
+
+        let context = Context::new();
+        context.add_plugin(reliquary::db::;
+    }
+}*/

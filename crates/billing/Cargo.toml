@@ -4,9 +4,10 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+dolmen = { workspace = true }
+reliquary = { workspace = true }
 latex = "0.3.1"
 documents = { path = "../documents" }
-reliquary = { git = "https://github.com/eupraxia05/reliquary.git", rev = "9c4c051" }
 training = { path = "../training" }
 clap = "4.5.50"
 rusqlite = "0.37.0"
@@ -16,7 +17,6 @@ tui = { version = "0.1.0", path = "../tui", optional = true }
 ratatui = "0.29.0"
 insta = "1.44.3"
 gui = { version = "0.1.0", path = "../gui" }
-dolmen = { version = "0.0.1", git = "https://github.com/eupraxia05/dolmen.git" }
 chrono = "0.4.43"
 
 [lints]
