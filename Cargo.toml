@@ -10,12 +10,12 @@ codegen-units = 1
 strip = true
 
 [workspace.dependencies]
-reliquary = {  git = "https://github.com/eupraxia05/reliquary.git", rev = "f1d9c7d", features = ["dolmen"] }
-dolmen = {  git = "https://github.com/eupraxia05/dolmen.git", rev = "a1b6e1d" }
+reliquary = {  git = "https://github.com/eupraxia05/reliquary.git", rev = "v0.0.2", features = ["dolmen"] }
+dolmen = {  git = "https://github.com/eupraxia05/dolmen.git", rev = "v0.0.1" }
 
 [patch.crates-io]
-dolmen = {git = "https://github.com/eupraxia05/dolmen.git", rev = "a1b6e1d" }
-reliquary = { git = "https://github.com/eupraxia05/reliquary.git", rev = "f1d9c7d" }
+dolmen = {git = "https://github.com/eupraxia05/dolmen.git", rev = "v0.0.1" }
+reliquary = { git = "https://github.com/eupraxia05/reliquary.git", rev = "v0.0.2" }
 
 [workspace.lints.rust]
 missing_docs = "allow"
