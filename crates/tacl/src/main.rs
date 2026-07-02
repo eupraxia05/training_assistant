@@ -3,6 +3,8 @@ use dolmen::prelude::*;
 use reliquary::prelude::*;
 use tui::Tui;
 
+mod config;
+
 fn main() -> dolmen::Result<()> {
     let mut context = Context::new();
     context.add_plugin(DbPlugin)?;

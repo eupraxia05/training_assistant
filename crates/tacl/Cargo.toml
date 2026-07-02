@@ -15,6 +15,7 @@ color-eyre = "0.6.5"
 training = { version = "0.1.0", path = "../training", optional = true }
 tui = { version = "0.1.0", path = "../tui", optional = true }
 db_commands = { path = "../db_commands", optional = true}
+serde = "1.0.228"
 
 [lints]
 workspace = true
