@@ -139,6 +139,7 @@ impl TableField for ExerciseProgram {
 #[derive(TableRow, Debug)]
 pub struct Exercise {
     name: String,
+    video_url: String,
 }
 
 // TODO: implement this

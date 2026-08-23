@@ -54,8 +54,19 @@ fn run_config_command(
             "set" => {
                 let mut config = load_config();
 
-                let config_value =
-                    serde_json::to_value(config);
+                let mut config_value =
+                    serde_json::to_value(config)
+                        .unwrap();
+
+                let key = subcommand
+                    .1
+                    .get_one::<String>("key")
+                    .unwrap();
+
+                let mut value =
+                    config_value.get_mut(key).unwrap();
+
+                // need to set value from string
 
                 match subcommand
                     .1
