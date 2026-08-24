@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use std::ffi::OsString;
 
 pub mod config;
+pub mod db;
 pub mod tui;
 
 pub struct CommandRunner {

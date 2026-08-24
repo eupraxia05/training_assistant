@@ -1,17 +1,22 @@
 use std::{default, fmt::Debug, rc::Rc, sync::Arc};
 
-use crate::{CommandRunContext, CommandRunner};
+use crate::{
+    CommandRunContext, CommandRunner, config::Config,
+};
 
 use clap::{ArgMatches, Command};
 use cursive::{
-    Cursive, CursiveRunner,
+    Cursive, CursiveRunner, View,
     backend::Backend,
     event::{Event, Key},
     menu::Tree,
-    view::{Nameable, Resizable, ViewWrapper},
+    view::{
+        Nameable, Resizable, Scrollable, ViewWrapper,
+    },
     views::{
-        BoxedView, Dialog, DummyView, LinearLayout,
-        TextView, ViewRef,
+        BoxedView, Button, Dialog, DummyView,
+        LinearLayout, ListChild, ListView, ScrollView,
+        SelectView, TextView, ViewRef,
     },
 };
 use cursive_tabs::{
@@ -28,6 +33,7 @@ pub struct Tui {
 struct TuiState {
     edit_state: EditState,
     tool_view_active: bool,
+    config: Config,
 }
 
 #[derive(Default)]
@@ -61,7 +67,11 @@ impl Tui {
     pub fn open_session(&mut self) {
         let mut cursive = Cursive::new();
 
-        cursive.set_user_data(TuiState::default());
+        let mut tui_state = TuiState::default();
+        tui_state.config =
+            crate::config::load_config();
+
+        cursive.set_user_data(tui_state);
 
         cursive
             .menubar()
@@ -231,13 +241,7 @@ impl Tui {
                     .tool_view_active = true;
             }
             EditState::Clients => {
-                cursive.add_layer(
-                    Dialog::new().title("Clients"),
-                );
-                cursive
-                    .user_data::<TuiState>()
-                    .unwrap()
-                    .tool_view_active = true;
+                setup_client_tool_layer(cursive);
             }
             EditState::Exercises => {
                 cursive.add_layer(
@@ -304,6 +308,59 @@ fn run_tui_command_fn(
     return "Done.".into();
 }
 
+fn setup_client_tool_layer(cursive: &mut Cursive) {
+    let config = &cursive
+        .user_data::<TuiState>()
+        .expect("couldn't get TUI state")
+        .config;
+
+    let connection =
+        crate::db::open_connection(&config.db_path);
+
+    let mut clients_query = connection
+        .prepare("SELECT id, name FROM client")
+        .expect("couldn't prepare clients query");
+
+    let mut client_rows = clients_query
+        .query([])
+        .expect("couldn't run clients query");
+
+    let mut list_view = SelectView::new();
+
+    while let Some(row) = client_rows
+        .next()
+        .expect("couldn't get next client row")
+    {
+        list_view.add_item(
+            row.get::<_, String>(1).unwrap(),
+            row.get::<_, i32>(0).unwrap(),
+        );
+    }
+
+    let scroll_view = ScrollView::new(list_view);
+
+    let operations_view = LinearLayout::vertical()
+        .child(
+            Button::new("New", |c| {})
+                .with_name("client_operations_new"),
+        )
+        .child(Button::new("Search", |c| {}));
+
+    let tool_content_view = LinearLayout::horizontal()
+        .child(scroll_view)
+        .child(operations_view);
+
+    cursive.add_layer(
+        Dialog::new()
+            .title("Clients")
+            .content(tool_content_view),
+    );
+    cursive
+        .user_data::<TuiState>()
+        .unwrap()
+        .tool_view_active = true;
+}
+
 #[cfg(test)]
 mod tests {
     use cursive::backends::{
@@ -365,7 +422,6 @@ mod tests {
             let mut runner =
                 tui.runner(backend).unwrap();
             runner.step();
-            runner;
 
             insta::assert_snapshot!(
                 stream.try_recv().unwrap()
@@ -381,15 +437,24 @@ mod tests {
             backend
                 .input()
                 .send(Some(
-                    cursive::event::Event::Key(
-                        cursive::event::Key::Enter,
-                    ),
+                    cursive::event::Event::Char(' '),
+                ))
+                .unwrap();
+
+            backend
+                .input()
+                .send(Some(
+                    cursive::event::Event::Refresh,
                 ))
                 .unwrap();
 
             let mut runner =
                 tui.runner(backend).unwrap();
             runner.step();
+
+            insta::assert_snapshot!(
+                stream.try_recv().unwrap()
+            );
 
             assert!(!runner.is_running());
         }

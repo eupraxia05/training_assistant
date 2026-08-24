@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = [ "crates/tacl", "crates/billing", "crates/documents", "crates/tagui", "crates/training", "crates/tui", "crates/db_commands", "crates/gui", "crates/tacl-new", "crates/core-new"]
+members = [ "crates/tacl-new", "crates/core-new"]
 
 [profile.dist]
 inherits = "release"

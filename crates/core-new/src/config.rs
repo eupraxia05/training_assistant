@@ -13,9 +13,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::{CommandRunContext, CommandRunner};
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Config {
-    db_path: PathBuf,
+    pub db_path: PathBuf,
 }
 
 impl Default for Config {
@@ -55,8 +55,10 @@ fn run_config_command(
                 let mut config = load_config();
 
                 let mut config_value =
-                    serde_json::to_value(config)
-                        .unwrap();
+                    serde_json::to_value(
+                        config.clone(),
+                    )
+                    .unwrap();
 
                 let key = subcommand
                     .1
